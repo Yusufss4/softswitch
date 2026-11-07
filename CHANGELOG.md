@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- IGMP snooping (RFC 4541): `igmp::Snooper` tracks members per (VLAN, group) with membership
+  timeouts and mrouter ports learned from queries. The data plane punts IGMP as a copy, floods
+  queries, sends reports/leaves only to mrouter ports, and forwards multicast data to members and
+  mrouter ports only (unregistered groups are never flooded; 224.0.0.0/24 always is).
+- Fast-leave on portfast (host) ports; on other ports a leave shortens the membership to 2 s and
+  the querier sends a group-specific query so remaining listeners can re-report.
+- Snooping querier for networks without a multicast router (startup queries, then every query
+  interval); sw1 is the querier in the test topology.
+- `[no] ip igmp snooping [vlan ID | querier | fast-leave]`, `ip igmp snooping query-interval`,
+  `show ip igmp snooping`; `scripts/mcast.py` test helper.
+
 ### Fixed
 - TCP and UDP through the switch were dropped by receivers: senders on veth offload checksums
   and AF_PACKET delivers such frames with only the pseudo-header sum (TP_STATUS_CSUMNOTREADY).
