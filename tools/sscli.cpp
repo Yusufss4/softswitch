@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 
+#include "softswitch/common/args.hpp"
 #include "softswitch/sys/fd.hpp"
 #include "softswitch/sys/unix_socket.hpp"
 
@@ -47,12 +48,13 @@ int run(std::span<char*> args) {
   std::string name = "sw1";
   std::string run_dir = "/tmp/softswitch";
   std::string command;
-  for (std::size_t i = 1; i < args.size(); ++i) {
-    const std::string_view arg = args[i];
-    if ((arg == "-s" || arg == "--switch") && i + 1 < args.size()) {
-      name = args[++i];
-    } else if (arg == "--run-dir" && i + 1 < args.size()) {
-      run_dir = args[++i];
+  softswitch::ArgReader reader(args);
+  while (const auto next = reader.next()) {
+    const std::string_view arg = *next;
+    if (arg == "-s" || arg == "--switch") {
+      name = reader.value(arg);
+    } else if (arg == "--run-dir") {
+      run_dir = reader.value(arg);
     } else if (arg == "-h" || arg == "--help") {
       std::cout << "usage: sscli [-s NAME] [--run-dir DIR] [COMMAND...]\n";
       return 0;

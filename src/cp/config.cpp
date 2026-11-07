@@ -261,8 +261,10 @@ std::string format_vlan_list(const VlanSet& vlans) {
     return "none";
   }
   std::string out;
-  for (unsigned v = kMinVlanId; v <= kMaxVlanId; ++v) {
+  unsigned v = kMinVlanId;
+  while (v <= kMaxVlanId) {
     if (!vlans.test(v)) {
+      ++v;
       continue;
     }
     unsigned end = v;
@@ -276,7 +278,7 @@ std::string format_vlan_list(const VlanSet& vlans) {
     if (end != v) {
       out += "-" + std::to_string(end);
     }
-    v = end;
+    v = end + 1;
   }
   return out;
 }
