@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <fstream>
@@ -257,19 +258,32 @@ std::string ControlPlane::clear(const std::vector<std::string>& t) {
   }
   std::optional<PortId> port;
   std::optional<VlanId> vlan;
-  for (std::size_t i = 3; i < t.size(); ++i) {
-    if (t[i] == "dynamic") {
+  std::size_t i = 3;
+  while (i < t.size()) {
+    const std::string& word = t[i];
+    if (word == "dynamic") {
+      i += 1;
       continue;
     }
-    if (t[i] == "vlan" && i + 1 < t.size()) {
-      vlan = static_cast<VlanId>(std::stoul(t[++i]));
-    } else if (t[i] == "interface" && i + 1 < t.size()) {
-      port = config_.port_index(t[++i]);
+    if (i + 1 >= t.size()) {
+      return "% '" + word + "' needs a value\n";
+    }
+    const std::string& arg = t[i + 1];
+    i += 2;
+    if (word == "vlan") {
+      unsigned vid = 0;
+      const auto [ptr, ec] = std::from_chars(arg.data(), arg.data() + arg.size(), vid);
+      if (ec != std::errc{} || ptr != arg.data() + arg.size() || !valid_vlan(vid)) {
+        return "% invalid VLAN id '" + arg + "'\n";
+      }
+      vlan = static_cast<VlanId>(vid);
+    } else if (word == "interface") {
+      port = config_.port_index(arg);
       if (!port) {
-        return "% no such interface '" + t[i] + "'\n";
+        return "% no such interface '" + arg + "'\n";
       }
     } else {
-      return "% unexpected '" + t[i] + "'\n";
+      return "% unexpected '" + word + "'\n";
     }
   }
   const auto removed = fdb_.flush(port, vlan);
