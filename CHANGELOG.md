@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Packet library (`softswitch::pkt`): bounds-checked parsers and builders for Ethernet/802.1Q
+  (tag insert/strip in place and on copy), ARP, IPv4 (RFC 1071 checksum, RFC 1624 incremental
+  TTL update), ICMP echo/error, IGMP v1/v2/v3 and spanning-tree BPDUs (config, TCN, RST).
+- Common vocabulary types: `MacAddress`, `Ipv4Address`, `Ipv4Prefix`, port masks.
+- `fuzz_packet` libFuzzer target, packet micro-benchmarks, `scripts/check.sh` (local CI gates).
+
 ### Changed
 - Release dry runs (`workflow_dispatch`) now run the publish job too (download, SBOM, checksums, notes) and upload the bundle as an artifact instead of creating a release.
 - GitHub Actions bumped: upload-artifact v7, download-artifact v8, upload-pages-artifact v5, codeql-action v4, sticky-pull-request-comment v3.

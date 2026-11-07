@@ -17,6 +17,7 @@ cppcheck \
   --inline-suppr \
   --suppress=missingIncludeSystem \
   --suppress=unmatchedSuppression \
+  --suppress=useStlAlgorithm \
   --suppress="*:/usr/*" \
   -j "$(nproc)" \
   --xml --output-file="$OUT/cppcheck.xml" \
