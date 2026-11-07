@@ -72,6 +72,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   egress.in_port = static_cast<PortId>(data[0] % 5);  // includes an out-of-range port
   dp::RxFrame frame;
   frame.vlan_tci_valid = (data[1] & 1U) != 0;
+  frame.checksum_incomplete = (data[1] & 2U) != 0;
   frame.vlan_tci = static_cast<std::uint16_t>((data[1] << 8U) | data[2]);
   frame.data = std::span<const std::uint8_t>(data + 3, size - 3);
   pipeline.process(world.t, egress.in_port, frame, egress);

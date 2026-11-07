@@ -53,8 +53,10 @@ struct PipelineHarness {
   }
 
   void receive(PortId port, const std::vector<std::uint8_t>& frame,
-               std::optional<std::uint16_t> offloaded_tci = std::nullopt) {
+               std::optional<std::uint16_t> offloaded_tci = std::nullopt,
+               bool checksum_incomplete = false) {
     dp::RxFrame rx;
+    rx.checksum_incomplete = checksum_incomplete;
     rx.data = frame;
     rx.vlan_tci_valid = offloaded_tci.has_value();
     rx.vlan_tci = offloaded_tci.value_or(0);

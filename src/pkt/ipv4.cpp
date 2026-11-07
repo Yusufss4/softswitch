@@ -13,6 +13,7 @@ constexpr std::uint32_t fold(std::uint32_t sum) noexcept {
 }
 
 constexpr std::size_t kChecksumOffset = 10;
+constexpr std::size_t kEthHeaderLenForChecksum = 14;  // untagged Ethernet
 constexpr std::size_t kTtlOffset = 8;
 
 }  // namespace
@@ -79,6 +80,40 @@ std::uint8_t decrement_ttl(std::span<std::uint8_t> l3) noexcept {
   store_be16(p + kChecksumOffset,
              checksum_adjust(load_be16(p + kChecksumOffset), old_word, new_word));
   return p[kTtlOffset];
+}
+
+std::uint16_t l4_checksum(Ipv4Address src, Ipv4Address dst, std::uint8_t protocol,
+                          std::span<const std::uint8_t> l4) noexcept {
+  std::uint32_t pseudo = (src.value >> 16U) + (src.value & 0xffffU) + (dst.value >> 16U) +
+                         (dst.value & 0xffffU) + protocol + static_cast<std::uint32_t>(l4.size());
+  return internet_checksum(l4, fold(pseudo));
+}
+
+bool complete_l4_checksum(std::span<std::uint8_t> frame) noexcept {
+  if (frame.size() < kEthHeaderLenForChecksum || load_be16(frame.data() + 12) != 0x0800) {
+    return false;
+  }
+  auto l3 = frame.subspan(kEthHeaderLenForChecksum);
+  const auto ip = parse_ipv4(l3);
+  if (!ip || (ip->flags_frag & 0x3FFFU) != 0) {
+    return false;  // not IPv4, or a fragment (the checksum covers the reassembled datagram)
+  }
+  auto l4 = l3.subspan(ip->header_len, ip->total_len - ip->header_len);
+  std::size_t field = 0;
+  if (ip->protocol == kIpProtoUdp && l4.size() >= 8) {
+    field = 6;
+  } else if (ip->protocol == kIpProtoTcp && l4.size() >= 20) {
+    field = 16;
+  } else {
+    return false;
+  }
+  store_be16(l4.data() + field, 0);
+  std::uint16_t sum = l4_checksum(ip->src, ip->dst, ip->protocol, l4);
+  if (ip->protocol == kIpProtoUdp && sum == 0) {
+    sum = 0xFFFF;  // RFC 768: zero means "no checksum"
+  }
+  store_be16(l4.data() + field, sum);
+  return true;
 }
 
 std::size_t write_ipv4_header(std::span<std::uint8_t> out, const Ipv4Header& h) noexcept {

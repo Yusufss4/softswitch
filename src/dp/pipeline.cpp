@@ -116,6 +116,16 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
   }
   c.eth = *eth;
 
+  // ---- finish offloaded TCP/UDP checksums (works on the private copy) -----------------------
+  if (frame.checksum_incomplete && c.eth.ethertype == pkt::kEtherTypeIpv4) {
+    if (c.untagged.data() != scratch_.data()) {
+      std::memcpy(scratch_.data(), c.untagged.data(), c.untagged.size());
+    }
+    const std::span<std::uint8_t> mutable_frame(scratch_.data(), c.untagged.size());
+    (void)pkt::complete_l4_checksum(mutable_frame);
+    c.untagged = mutable_frame;
+  }
+
   // ---- spanning tree BPDUs go to the control plane, whatever the VLAN or STP state ----------
   if (c.eth.dst == pkt::kStpGroupMac) {
     if ((tables.flags & shm::global_flag::kStpEnabled) != 0) {

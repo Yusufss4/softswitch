@@ -2,7 +2,9 @@
 
 #include "frame_builder.hpp"
 #include "pipeline_harness.hpp"
+#include "softswitch/pkt/bytes.hpp"
 #include "softswitch/pkt/ethernet.hpp"
+#include "softswitch/pkt/ipv4.hpp"
 
 namespace softswitch {
 namespace {
@@ -62,6 +64,25 @@ TEST(PipelineFlood, InBandTagIsStrippedForUntaggedEgress) {
   ASSERT_EQ(h.egress.sent.size(), 1U);
   EXPECT_EQ(h.egress.sent[0].frame.size(), frame.size() - 4);
   EXPECT_EQ(pkt::parse_ethernet(h.egress.sent[0].frame)->tagged, false);
+}
+
+// Regression for #47: offloaded UDP checksums must be completed before forwarding.
+TEST(PipelineFlood, CompletesOffloadedUdpChecksum) {
+  PipelineHarness h(2);
+  FrameBuilder b;
+  b.mac("ff:ff:ff:ff:ff:ff").mac("02:00:00:00:00:01").u16(pkt::kEtherTypeIpv4);
+  b.raw({0x45, 0x00}).u16(20 + 12).raw({0, 1, 0x40, 0x00, 64, pkt::kIpProtoUdp, 0, 0});
+  b.ip("10.0.10.11").ip("10.0.10.255");
+  b.u16(40000).u16(5000).u16(12).u16(0xBEEF).raw({'p', 'i', 'n', 'g'});
+  auto f = b.build();
+  pkt::store_be16(f.data() + 24, pkt::internet_checksum(std::span{f}.subspan(14, 20)));
+  f.resize(60, 0);
+  h.receive(0, f, std::nullopt, /*checksum_incomplete=*/true);
+  ASSERT_EQ(h.egress.sent.size(), 1U);
+  const auto l4 = std::span{h.egress.sent[0].frame}.subspan(34, 12);
+  EXPECT_EQ(pkt::l4_checksum(*Ipv4Address::parse("10.0.10.11"), *Ipv4Address::parse("10.0.10.255"),
+                             pkt::kIpProtoUdp, l4),
+            0);
 }
 
 TEST(PipelineFlood, TracesWhenSamplingEnabled) {
