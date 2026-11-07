@@ -67,7 +67,8 @@ constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "show mac address-table [vlan ID] [interface PORT]\n"
     "show spanning-tree\n"
-    "show ip igmp snooping\n"
+    "show ip igmp snooping | show ip interface | show arp\n"
+    "clear arp\n"
     "clear mac address-table [dynamic] [vlan ID] [interface PORT]\n"
     "vlan ID [name NAME] | no vlan ID\n"
     "interface PORT description TEXT | shutdown | no shutdown\n"
@@ -81,6 +82,7 @@ constexpr const char* kHelp =
     "[no] spanning-tree | spanning-tree priority|hello-time|max-age|forward-time N\n"
     "interface PORT spanning-tree portfast | cost N | port-priority N\n"
     "[no] ip igmp snooping [vlan ID | querier | fast-leave] | ip igmp snooping query-interval N\n"
+    "interface vlanN ip address A.B.C.D/N | interface vlanN no ip address | ip arp timeout N\n"
     "trace sample N\n"
     "hostname NAME\n";
 
@@ -114,6 +116,12 @@ std::string ControlPlane::show(const std::vector<std::string>& t) const {
   }
   if (what == "ip" && t.size() > 2 && t[2] == "igmp") {
     return show_igmp();
+  }
+  if (what == "ip" && t.size() > 2 && t[2] == "interface") {
+    return show_ip_interface();
+  }
+  if (what == "arp" || (what == "ip" && t.size() > 2 && t[2] == "arp")) {
+    return show_arp();
   }
   if (what == "help") {
     return kHelp;
@@ -297,6 +305,29 @@ std::string ControlPlane::show_igmp() const {
   }
   return out.str() + routers.render() + "\n" +
          (groups.empty() ? std::string("no groups\n") : groups.render());
+}
+
+std::string ControlPlane::show_ip_interface() const {
+  TextTable table({"Interface", "Address", "Status", "MAC"});
+  for (const auto& [vid, prefix] : config_.svis) {
+    const bool up = router_.svi_in_vlan(vid) != nullptr;
+    table.add_row({"vlan" + std::to_string(vid), prefix.to_string(),
+                   up ? "up" : "down (no such VLAN)", bridge_mac_.to_string()});
+  }
+  return table.empty() ? std::string("no IP interfaces\n") : table.render();
+}
+
+std::string ControlPlane::show_arp() const {
+  const auto now = l3::Clock::now();
+  TextTable table({"Address", "MAC", "Interface", "Age"});
+  for (const auto& [addr, n] : router_.neighbors()) {
+    table.add_row(
+        {addr.to_string(), n.mac.to_string(), "vlan" + std::to_string(n.vlan),
+         std::to_string(std::chrono::duration_cast<std::chrono::seconds>(now - n.updated).count()) +
+             "s"});
+  }
+  return (table.empty() ? std::string("no ARP entries\n") : table.render()) +
+         "resolving: " + std::to_string(router_.pending()) + "\n";
 }
 
 std::string ControlPlane::show_dataplane() const {
