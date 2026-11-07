@@ -1,5 +1,6 @@
 #include <benchmark/benchmark.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -12,7 +13,9 @@ namespace {
 
 using namespace softswitch::pkt;
 
+/// Ethernet + IPv4 frame of @p len bytes (at least 64).
 std::vector<std::uint8_t> ip_frame(std::size_t len) {
+  len = std::max<std::size_t>(len, 64);
   std::vector<std::uint8_t> f(len, 0x5a);
   store_be16(f.data() + kMacAddrsLen, kEtherTypeIpv4);
   std::uint8_t* ip = f.data() + kEthHeaderLen;
@@ -33,9 +36,11 @@ void BM_ParseEthernet(benchmark::State& state) {
 BENCHMARK(BM_ParseEthernet);
 
 void BM_InternetChecksum(benchmark::State& state) {
-  const auto f = ip_frame(static_cast<std::size_t>(state.range(0)));
+  const auto len = static_cast<std::size_t>(state.range(0));
+  const auto f = ip_frame(1514);
+  const auto data = std::span{f}.first(len);
   for (auto _ : state) {
-    benchmark::DoNotOptimize(internet_checksum(f));
+    benchmark::DoNotOptimize(internet_checksum(data));
   }
   state.SetBytesProcessed(state.iterations() * state.range(0));
 }
