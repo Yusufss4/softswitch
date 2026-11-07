@@ -29,7 +29,9 @@ configure_file(include/softswitch/version.hpp.in
 # ---- libraries ---------------------------------------------------------------
 # softswitch::proto: pure protocol logic (no syscalls); unit-tested and fuzzed.
 add_library(softswitch_proto
+  src/common/log.cpp
   src/common/types.cpp
+  src/dp/pipeline.cpp
   src/mac_table.cpp
   src/pkt/arp.cpp
   src/pkt/bpdu.cpp
@@ -47,18 +49,26 @@ target_include_directories(softswitch_proto PUBLIC
 target_link_libraries(softswitch_proto PUBLIC softswitch::options)
 
 # softswitch::runtime: syscalls and processes (shared memory, sockets, packet I/O).
+find_package(Threads REQUIRED)
 add_library(softswitch_runtime
+  src/cp/control_plane.cpp
+  src/cp/event_loop.cpp
+  src/dp/af_packet_port.cpp
+  src/dp/dataplane.cpp
   src/shm/region_mapping.cpp
   src/sys/fd.cpp
+  src/sys/realtime.cpp
   src/sys/shared_memory.cpp
   src/sys/unix_socket.cpp
 )
 add_library(softswitch::runtime ALIAS softswitch_runtime)
-target_link_libraries(softswitch_runtime PUBLIC softswitch::proto)
+target_link_libraries(softswitch_runtime PUBLIC softswitch::proto Threads::Threads)
 
 # ---- executables ------------------------------------------------------------
-add_executable(softswitch src/main.cpp)
-target_link_libraries(softswitch PRIVATE softswitch::proto)
+add_executable(softswitchd src/cp/main.cpp)
+target_link_libraries(softswitchd PRIVATE softswitch::runtime)
+add_executable(ss-dataplane src/dp/main.cpp)
+target_link_libraries(ss-dataplane PRIVATE softswitch::runtime)
 
 # ---- tests / benchmarks / fuzzers -------------------------------------------
 if(SOFTSWITCH_BUILD_TESTS)
@@ -85,7 +95,7 @@ endif()
 
 # ---- install / package ------------------------------------------------------
 include(GNUInstallDirs)
-install(TARGETS softswitch RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS softswitchd ss-dataplane RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES README.md LICENSE CHANGELOG.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 set(CPACK_PACKAGE_NAME "softswitch")

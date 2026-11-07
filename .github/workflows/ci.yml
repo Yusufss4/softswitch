@@ -50,7 +50,9 @@ jobs:
       - name: Test
         run: ctest --preset release
       - name: Smoke test binary
-        run: ./build/release/softswitch --version
+        run: |
+          ./build/release/softswitchd --version
+          ./build/release/ss-dataplane --version
 
   pi-compat:
     name: pi-compat (debian bookworm, arm64)
