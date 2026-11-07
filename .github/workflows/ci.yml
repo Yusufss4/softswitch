@@ -1,0 +1,294 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DEPS: >-
+    cmake ninja-build pkg-config libgtest-dev libgmock-dev libbenchmark-dev
+    libpcap-dev libnl-3-dev libnl-route-3-dev
+
+jobs:
+  pre-commit:
+    name: pre-commit (format, whitespace, yaml)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pre-commit/action@v3.0.1
+
+  build-test:
+    name: build-test (${{ matrix.os }}, ${{ matrix.compiler }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        compiler: [gcc, clang]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS ${{ matrix.compiler == 'clang' && 'clang' || 'g++' }}
+      - name: Configure
+        run: cmake --preset release -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+      - name: Build
+        run: cmake --build --preset release
+      - name: Test
+        run: ctest --preset release
+      - name: Smoke test binary
+        run: ./build/release/softswitch --version
+
+  pi-compat:
+    name: pi-compat (debian bookworm, arm64)
+    runs-on: ubuntu-24.04-arm
+    container: debian:bookworm
+    steps:
+      - name: Install dependencies (same toolchain as the Raspberry Pi)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential git ca-certificates file $DEPS
+      - uses: actions/checkout@v4
+      - name: Configure, build, test
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+          ctest --preset release
+      - name: Package
+        run: cd build/release && cpack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: softswitch-bookworm-arm64
+          path: |
+            build/release/softswitch_*.deb
+            build/release/softswitch-*.tar.gz
+          retention-days: 14
+
+  sanitizers:
+    name: sanitizers (${{ matrix.preset }})
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++
+      - name: Lower ASLR entropy for TSan (Ubuntu 24.04 kernels use 32 bits)
+        if: matrix.preset == 'tsan'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --preset ${{ matrix.preset }}
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++ clang-tidy-18
+      - name: Configure (compile database)
+        run: cmake --preset dev
+      - name: Run clang-tidy
+        env:
+          CLANG_TIDY: clang-tidy-18
+        run: scripts/clang-tidy.sh build/dev
+
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++ cppcheck python3-pygments
+      - name: Configure (compile database)
+        run: cmake --preset dev
+      - name: Run Cppcheck
+        run: scripts/cppcheck.sh build/dev
+      - name: Job summary
+        if: always()
+        run: cat reports/cppcheck/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cppcheck-report
+          path: reports/cppcheck/
+
+  valgrind:
+    name: valgrind (memcheck)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++ valgrind
+      - name: Build (Debug, no sanitizers)
+        run: |
+          cmake --preset dev -DSOFTSWITCH_BUILD_BENCHMARKS=OFF
+          cmake --build --preset dev
+      - name: Run unit tests under memcheck
+        run: scripts/valgrind.sh build/dev
+      - name: Job summary
+        if: always()
+        run: cat reports/valgrind/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: valgrind-report
+          path: reports/valgrind/
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++ gcovr
+      - name: Build, test, measure
+        run: scripts/coverage.sh
+      - name: Job summary
+        run: |
+          {
+            echo "## Coverage"
+            echo '```'
+            cat reports/coverage/summary-short.txt
+            echo '```'
+            echo "<details><summary>Per-file</summary>"
+            echo
+            echo '```'
+            cat reports/coverage/summary.txt
+            echo '```'
+            echo "</details>"
+          } | tee coverage-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage/
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage
+          path: coverage-comment.md
+
+  fuzz:
+    name: fuzz (libFuzzer, 60s per target)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS clang
+      - name: Build fuzzers
+        run: |
+          cmake --preset fuzz
+          cmake --build --preset fuzz
+      - name: Fuzz
+        run: |
+          mkdir -p fuzz-artifacts
+          for f in build/fuzz/fuzz/fuzz_*; do
+            [[ -x "$f" && ! -d "$f" ]] || continue
+            echo "::group::$(basename "$f")"
+            "$f" -max_total_time=60 -timeout=10 -rss_limit_mb=2048 \
+                 -artifact_prefix=fuzz-artifacts/ -print_final_stats=1
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: fuzz-artifacts/
+
+  benchmark:
+    name: benchmark (arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++
+      - name: Build
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+      - name: Run micro-benchmarks
+        run: |
+          ./build/release/bench/softswitch_bench \
+            --benchmark_min_time=0.2s \
+            --benchmark_format=json --benchmark_out=bench.json
+      - name: Restore baseline from main
+        uses: actions/cache/restore@v4
+        with:
+          path: ./benchmark-cache
+          key: benchmark-${{ runner.arch }}-${{ github.run_id }}
+          restore-keys: benchmark-${{ runner.arch }}-
+      - name: Compare against baseline
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: softswitch micro-benchmarks
+          tool: googlecpp
+          output-file-path: bench.json
+          external-data-json-path: ./benchmark-cache/benchmark-data.json
+          alert-threshold: "200%"
+          fail-on-alert: true
+          summary-always: true
+      - name: Save new baseline (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: ./benchmark-cache
+          key: benchmark-${{ runner.arch }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench.json
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [pre-commit, build-test, pi-compat, sanitizers, clang-tidy, cppcheck, valgrind, coverage, fuzz, benchmark]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: All required jobs passed
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" == "true" ]]; then
+            echo "::error::One or more required jobs did not succeed"
+            exit 1
+          fi

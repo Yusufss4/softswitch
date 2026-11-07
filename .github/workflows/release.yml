@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch: # dry run: builds packages and docs without publishing
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package (bookworm, ${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    container: debian:bookworm
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential git ca-certificates file \
+            cmake ninja-build pkg-config libgtest-dev libgmock-dev libpcap-dev libnl-3-dev libnl-route-3-dev
+      - uses: actions/checkout@v4
+      - name: Check tag matches project version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^  VERSION \([0-9][0-9.]*\)$/\1/p' CMakeLists.txt)
+          echo "CMake version: $version, tag: $GITHUB_REF_NAME"
+          test "v$version" = "$GITHUB_REF_NAME"
+      - name: Build and test
+        run: |
+          cmake --preset release -DSOFTSWITCH_BUILD_BENCHMARKS=OFF
+          cmake --build --preset release
+          ctest --preset release
+      - name: Package (.deb + .tar.gz)
+        run: |
+          cd build/release && cpack
+          for f in softswitch-*-Linux.tar.gz; do mv "$f" "${f%-Linux.tar.gz}-linux-${{ matrix.arch }}.tar.gz"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: |
+            build/release/softswitch_*.deb
+            build/release/softswitch-*.tar.gz
+
+  docs:
+    name: docs (doxygen)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++ doxygen graphviz
+      - name: Generate API docs
+        run: |
+          cmake --preset release -DSOFTSWITCH_BUILD_TESTS=OFF -DSOFTSWITCH_BUILD_BENCHMARKS=OFF
+          cmake --build build/release --target docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/release/docs/html
+
+  publish:
+    name: publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package, docs]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: dist
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/softswitch-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && !/^\[[^]]+\]: / { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::No CHANGELOG section for $version"; exit 1; }
+          {
+            echo
+            echo "### Install on Raspberry Pi OS / Debian bookworm (arm64)"
+            echo '```sh'
+            echo "sudo apt install ./softswitch_${version}_arm64.deb"
+            echo '```'
+            echo "Verify downloads with \`sha256sum -c SHA256SUMS\`."
+          } >> notes.md
+          cat notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "softswitch $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+
+  deploy-docs:
+    name: deploy docs to GitHub Pages
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

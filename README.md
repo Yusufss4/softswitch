@@ -1,16 +1,60 @@
 # softswitch
 
-A user-space L2/L3 software switch in C++20, running on a Raspberry Pi 5.
+[![CI](https://github.com/Yusufss4/softswitch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Yusufss4/softswitch/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Yusufss4/softswitch/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Yusufss4/softswitch/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/Yusufss4/softswitch?sort=semver)](https://github.com/Yusufss4/softswitch/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-informational)
+![Platform](https://img.shields.io/badge/platform-Raspberry%20Pi%205%20%7C%20Linux-lightgrey)
+
+A small user-space L2/L3 Ethernet switch for Linux, written in C++20. It's structured
+like the software stack on a Marvell or Broadcom switch: a **control plane** owns
+configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
+packets using tables the control plane publishes through shared memory.
+
+> **Status:** early development (M0: project infrastructure). See the
+> [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
+
+## Planned features
+- 802.1Q VLANs: tag insert/strip, access/trunk ports, ingress/egress filtering
+- MAC learning, flooding and aging (FDB)
+- Rapid Spanning Tree (reduced RSTP), verified across three switches
+- IGMP snooping, so multicast isn't flooded
+- L3: ARP, ICMP, and routing between two VLAN interfaces, plus static routes
+- Control plane: CLI and rtnetlink. Data plane: AF_PACKET (TPACKET_V3), SCHED_FIFO, lock-free IPC
+- A read-only web GUI that shows live forwarding decisions
+- Benchmarks: packets per second, a latency histogram and perf profiles
 
 ## Build
 
-    cmake -S . -B build -G Ninja
-    cmake --build build
-    ctest --test-dir build --output-on-failure
+Requires CMake ≥ 3.21, Ninja, a C++20 compiler (GCC 12+ / Clang 14+) and GoogleTest.
 
-## Test topology
+    cmake --preset dev
+    cmake --build --preset dev
+    ctest --preset dev
 
-    scripts/setup_netns.sh      # creates hosts h1..h3 wired to ports sw-p1..sw-p3
-    scripts/teardown_netns.sh
+Release packages for Raspberry Pi OS / Debian bookworm (arm64 and amd64) are attached to every
+[GitHub release](https://github.com/Yusufss4/softswitch/releases).
 
-Don't attach the switch to `eth0`; that's the SSH link.
+## Quality gates
+Every pull request runs:
+
+| Check | Tooling |
+|---|---|
+| Format & hygiene | pre-commit, clang-format 18, `.editorconfig` |
+| Build & unit tests | GCC and Clang on x86-64 and arm64, plus Debian bookworm (the Pi's toolchain) |
+| Sanitizers | ASan + UBSan, TSan |
+| Static analysis | clang-tidy, Cppcheck (HTML report), CodeQL |
+| Dynamic analysis | Valgrind memcheck (XML report) |
+| Coverage | gcovr: HTML report, with the summary posted on the PR |
+| Fuzzing | libFuzzer + ASan/UBSan |
+| Performance | Google Benchmark, compared against the main branch's baseline |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for running these locally.
+
+## Documentation
+- API reference: <https://yusufss4.github.io/softswitch/> (published with each release)
+- Design notes: `docs/design.md` (arrives with M1)
+
+## License
+[MIT](LICENSE)
