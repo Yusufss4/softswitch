@@ -141,6 +141,7 @@ std::size_t AfPacketPort::rx_burst(std::span<RxFrame> out) noexcept {
     f.data = std::span<const std::uint8_t>(rx_.frame(index) + h->tp_mac, h->tp_snaplen);
     f.vlan_tci_valid = (status & TP_STATUS_VLAN_VALID) != 0;
     f.vlan_tci = f.vlan_tci_valid ? h->tp_vlan_tci : std::uint16_t{0};
+    f.checksum_incomplete = (status & TP_STATUS_CSUMNOTREADY) != 0;
     f.timestamp_ns = (static_cast<std::uint64_t>(h->tp_sec) * 1'000'000'000ULL) + h->tp_nsec;
     index = (index + 1) % rx_.frames;
   }

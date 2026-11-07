@@ -107,6 +107,42 @@ std::vector<std::uint8_t> echo_request() {
   return f;
 }
 
+std::vector<std::uint8_t> udp_frame(std::uint16_t partial_checksum) {
+  FrameBuilder b;
+  b.mac("01:00:5e:01:01:01").mac("02:00:00:00:00:01").u16(kEtherTypeIpv4);
+  b.raw({0x45, 0x00}).u16(20 + 8 + 5).raw({0x00, 0x01, 0x40, 0x00, 0x01, kIpProtoUdp, 0, 0});
+  b.ip("10.0.10.11").ip("239.1.1.1");
+  b.u16(40000).u16(5000).u16(8 + 5).u16(partial_checksum).raw({'h', 'e', 'l', 'l', 'o'});
+  auto f = b.build();
+  store_be16(f.data() + 14 + 10, internet_checksum(std::span{f}.subspan(14, 20)));
+  return f;
+}
+
+TEST(Ipv4, CompletesPartialUdpChecksum) {
+  auto f = udp_frame(0x1234);  // what an offloading sender leaves: not a valid checksum
+  ASSERT_TRUE(complete_l4_checksum(f));
+  const auto l4 = std::span{f}.subspan(34, 13);
+  // A correct UDP checksum makes the pseudo-header + segment sum to 0xFFFF (complement 0).
+  EXPECT_EQ(l4_checksum(*Ipv4Address::parse("10.0.10.11"), *Ipv4Address::parse("239.1.1.1"),
+                        kIpProtoUdp, l4),
+            0);
+  const auto first = load_be16(f.data() + 40);
+  auto again = udp_frame(0x0000);
+  ASSERT_TRUE(complete_l4_checksum(again));
+  EXPECT_EQ(load_be16(again.data() + 40), first);  // independent of what was there before
+}
+
+TEST(Ipv4, CompleteChecksumIgnoresNonTcpUdpAndFragments) {
+  auto f = udp_frame(0);
+  f[14 + 9] = kIpProtoIcmp;
+  EXPECT_FALSE(complete_l4_checksum(f));
+  auto frag = udp_frame(0);
+  store_be16(frag.data() + 14 + 6, 0x2000);  // more fragments
+  EXPECT_FALSE(complete_l4_checksum(frag));
+  std::vector<std::uint8_t> runt(20, 0);
+  EXPECT_FALSE(complete_l4_checksum(runt));
+}
+
 TEST(Icmp, EchoRequestBecomesReply) {
   auto f = echo_request();
   ASSERT_TRUE(echo_request_to_reply(f));

@@ -51,6 +51,16 @@ struct Ipv4Header {
 /// incrementally. Returns the new TTL. The caller must have validated the header.
 std::uint8_t decrement_ttl(std::span<std::uint8_t> l3) noexcept;
 
+/// TCP/UDP checksum over the IPv4 pseudo-header and @p l4 (the whole segment).
+[[nodiscard]] std::uint16_t l4_checksum(Ipv4Address src, Ipv4Address dst, std::uint8_t protocol,
+                                        std::span<const std::uint8_t> l4) noexcept;
+
+/// Computes the TCP or UDP checksum of the untagged Ethernet frame @p frame in place.
+/// Frames from a sender that offloaded checksumming (veth, virtio) arrive with only the
+/// pseudo-header sum filled in (AF_PACKET reports TP_STATUS_CSUMNOTREADY); a switch must
+/// finish them before they leave. Returns false for anything that isn't IPv4 TCP/UDP.
+bool complete_l4_checksum(std::span<std::uint8_t> frame) noexcept;
+
 /// Writes a 20-byte header (no options) with a valid checksum. Returns 20, or 0 if too small.
 std::size_t write_ipv4_header(std::span<std::uint8_t> out, const Ipv4Header& header) noexcept;
 

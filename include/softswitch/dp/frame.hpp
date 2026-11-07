@@ -17,6 +17,9 @@ struct RxFrame {
   std::span<const std::uint8_t> data;
   std::uint16_t vlan_tci = 0;
   bool vlan_tci_valid = false;
+  /// The sender offloaded its TCP/UDP checksum (veth, virtio): only the pseudo-header sum is
+  /// present and the switch must complete it before forwarding (TP_STATUS_CSUMNOTREADY).
+  bool checksum_incomplete = false;
   std::uint64_t timestamp_ns = 0;
 };
 

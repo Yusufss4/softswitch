@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- TCP and UDP through the switch were dropped by receivers: senders on veth offload checksums
+  and AF_PACKET delivers such frames with only the pseudo-header sum (TP_STATUS_CSUMNOTREADY).
+  The data plane now completes those checksums before forwarding (#47).
+
 ## [0.4.0] - 2026-11-08
 
 ### Added

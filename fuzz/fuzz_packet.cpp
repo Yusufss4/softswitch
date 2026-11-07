@@ -50,6 +50,14 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     if (strip_tag(buf) != size) std::abort();
     if (std::memcmp(buf.data(), data, size) != 0) std::abort();
 
+    std::vector<std::uint8_t> csum(in.begin(), in.end());
+    if (complete_l4_checksum(csum)) {
+      // Completing an already complete checksum must not change it.
+      auto twice = csum;
+      (void)complete_l4_checksum(twice);
+      if (twice != csum) std::abort();
+    }
+
     std::vector<std::uint8_t> echo(in.begin(), in.end());
     if (echo_request_to_reply(echo)) {
       const auto l3 = std::span{echo}.subspan(kEthHeaderLen);
