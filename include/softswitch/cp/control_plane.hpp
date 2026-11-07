@@ -15,6 +15,7 @@
 #include "softswitch/l2/fdb.hpp"
 #include "softswitch/shm/publisher.hpp"
 #include "softswitch/shm/region.hpp"
+#include "softswitch/stp/rstp.hpp"
 #include "softswitch/sys/fd.hpp"
 #include "softswitch/sys/shared_memory.hpp"
 
@@ -68,6 +69,12 @@ class ControlPlane {
   void detach_dataplane(const char* why);
   void on_notify();
   void on_link(const LinkEvent& event);
+  /// (Re)creates the spanning-tree instance from the config, or tears it down when disabled.
+  void restart_stp();
+  /// Pushes port enablement, port parameters and bridge priority into RSTP.
+  void sync_stp();
+  /// Queues an untagged frame for transmission on exactly @p port (bypassing VLAN and STP).
+  void inject_raw(PortId port, std::span<const std::uint8_t> frame);
   void publish_now();
   void build_tables(shm::Tables& tables) const;
   /// Re-applies static MACs from the config and drops dynamic entries the config invalidated.
@@ -84,6 +91,7 @@ class ControlPlane {
   [[nodiscard]] std::string show_counters() const;
   [[nodiscard]] std::string show_dataplane() const;
   [[nodiscard]] std::string show_mac(const std::vector<std::string>& tokens) const;
+  [[nodiscard]] std::string show_spanning_tree() const;
 
   EventLoop* loop_;
   ControlPlaneOptions options_;
@@ -91,6 +99,9 @@ class ControlPlane {
   SwitchConfig config_;
   std::vector<PortRuntime> runtime_;
   l2::Fdb fdb_{shm::kFdbSlots / 2};
+  std::unique_ptr<stp::Rstp> rstp_;
+  std::vector<shm::StpState> stp_state_;
+  std::uint64_t inject_drops_ = 0;
   std::uint64_t learn_events_ = 0;
 
   sys::SharedMemory memory_;
