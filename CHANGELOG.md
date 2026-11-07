@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Release dry runs (`workflow_dispatch`) now run the publish job too (download, SBOM, checksums, notes) and upload the bundle as an artifact instead of creating a release.
+- GitHub Actions bumped: upload-artifact v7, download-artifact v8, upload-pages-artifact v5, codeql-action v4, sticky-pull-request-comment v3.
+
 ### Fixed
 - PR-title lint accepts capitalized subjects (Dependabot's `ci: Bump …`); only a trailing period is rejected.
 
