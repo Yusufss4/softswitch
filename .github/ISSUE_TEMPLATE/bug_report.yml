@@ -1,0 +1,31 @@
+name: Bug report
+description: Something forwards, learns or converges incorrectly, or crashes
+labels: ["type: bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Actual vs. expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Topology, config (`show running-config`), and the traffic you sent.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / captures
+      description: softswitchd output, `show counters`, a pcap if you have one.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "softswitch --version / git commit"
+    validations:
+      required: true

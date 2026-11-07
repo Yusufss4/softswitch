@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a new protocol feature, CLI command or improvement
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed design
+      description: Control-plane vs. data-plane impact, which tables change, standards references (IEEE 802.1Q, RFC …).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Tests that prove it works.
