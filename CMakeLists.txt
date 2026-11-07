@@ -31,6 +31,8 @@ configure_file(include/softswitch/version.hpp.in
 add_library(softswitch_proto
   src/common/log.cpp
   src/common/types.cpp
+  src/cp/config.cpp
+  src/cp/text_table.cpp
   src/dp/pipeline.cpp
   src/mac_table.cpp
   src/pkt/arp.cpp
@@ -51,8 +53,10 @@ target_link_libraries(softswitch_proto PUBLIC softswitch::options)
 # softswitch::runtime: syscalls and processes (shared memory, sockets, packet I/O).
 find_package(Threads REQUIRED)
 add_library(softswitch_runtime
+  src/cp/cli_server.cpp
   src/cp/control_plane.cpp
   src/cp/event_loop.cpp
+  src/cp/show.cpp
   src/dp/af_packet_port.cpp
   src/dp/dataplane.cpp
   src/shm/region_mapping.cpp
@@ -69,6 +73,8 @@ add_executable(softswitchd src/cp/main.cpp)
 target_link_libraries(softswitchd PRIVATE softswitch::runtime)
 add_executable(ss-dataplane src/dp/main.cpp)
 target_link_libraries(ss-dataplane PRIVATE softswitch::runtime)
+add_executable(sscli tools/sscli.cpp)
+target_link_libraries(sscli PRIVATE softswitch::runtime)
 
 # ---- tests / benchmarks / fuzzers -------------------------------------------
 if(SOFTSWITCH_BUILD_TESTS)
@@ -95,7 +101,7 @@ endif()
 
 # ---- install / package ------------------------------------------------------
 include(GNUInstallDirs)
-install(TARGETS softswitchd ss-dataplane RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS softswitchd ss-dataplane sscli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES README.md LICENSE CHANGELOG.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 set(CPACK_PACKAGE_NAME "softswitch")

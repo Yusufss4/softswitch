@@ -12,3 +12,4 @@ endfunction()
 
 softswitch_add_fuzzer(fuzz_mac_table)
 softswitch_add_fuzzer(fuzz_packet)
+softswitch_add_fuzzer(fuzz_config)

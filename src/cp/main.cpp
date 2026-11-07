@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 
+#include "softswitch/common/args.hpp"
 #include "softswitch/common/log.hpp"
 #include "softswitch/cp/control_plane.hpp"
 #include "softswitch/cp/event_loop.hpp"
@@ -15,7 +16,8 @@
 namespace {
 
 void usage() {
-  std::cout << "usage: softswitchd --name NAME --ports IF1,IF2,... [--run-dir DIR] [--debug]\n";
+  std::cout << "usage: softswitchd --name NAME --ports IF1,IF2,... [--config FILE] [--run-dir DIR] "
+               "[--debug]\n";
 }
 
 std::vector<std::string> split_csv(const std::string& text) {
@@ -32,20 +34,18 @@ std::vector<std::string> split_csv(const std::string& text) {
 
 int run(std::span<char*> args) {
   softswitch::cp::ControlPlaneOptions options;
-  for (std::size_t i = 1; i < args.size(); ++i) {
-    const std::string_view arg = args[i];
-    auto value = [&]() -> std::string {
-      if (i + 1 >= args.size()) {
-        throw std::invalid_argument(std::string(arg) + " needs a value");
-      }
-      return args[++i];
-    };
+  softswitch::ArgReader reader(args);
+  while (const auto next = reader.next()) {
+    const std::string_view arg = *next;
+    auto value = [&]() { return reader.value(arg); };
     if (arg == "--name") {
       options.name = value();
     } else if (arg == "--ports") {
       options.ports = split_csv(value());
     } else if (arg == "--run-dir") {
       options.run_dir = value();
+    } else if (arg == "--config") {
+      options.config_file = value();
     } else if (arg == "--debug") {
       softswitch::log::set_level(softswitch::log::Level::kDebug);
     } else if (arg == "--version") {

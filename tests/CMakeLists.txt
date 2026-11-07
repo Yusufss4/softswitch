@@ -5,6 +5,7 @@ include(GoogleTest)
 add_executable(softswitch_tests
   test_mac_table.cpp
   test_types.cpp
+  cp/test_config.cpp
   dp/test_pipeline_flood.cpp
   pkt/test_ethernet.cpp
   pkt/test_igmp_bpdu.cpp

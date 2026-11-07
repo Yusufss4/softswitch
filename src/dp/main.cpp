@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "softswitch/common/args.hpp"
 #include "softswitch/common/log.hpp"
 #include "softswitch/dp/dataplane.hpp"
 #include "softswitch/version.hpp"
@@ -21,14 +22,10 @@ void usage() {
 int run(std::span<char*> args) {
   softswitch::dp::DataPlaneOptions options;
   std::string tag = "dp";
-  for (std::size_t i = 1; i < args.size(); ++i) {
-    const std::string_view arg = args[i];
-    auto value = [&]() -> std::string {
-      if (i + 1 >= args.size()) {
-        throw std::invalid_argument(std::string(arg) + " needs a value");
-      }
-      return args[++i];
-    };
+  softswitch::ArgReader reader(args);
+  while (const auto next = reader.next()) {
+    const std::string_view arg = *next;
+    auto value = [&]() { return reader.value(arg); };
     if (arg == "--socket") {
       options.control_socket = value();
     } else if (arg == "--cpu") {
