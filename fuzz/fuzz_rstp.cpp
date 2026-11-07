@@ -18,7 +18,8 @@ namespace {
 
 void check(const Rstp& rstp) {
   std::size_t roots = 0;
-  for (PortId p = 0; p < rstp.num_ports(); ++p) {
+  for (std::size_t i = 0; i < rstp.num_ports(); ++i) {
+    const auto p = static_cast<PortId>(i);
     const auto& st = rstp.status(p);
     switch (st.role) {
       case Role::kRoot:

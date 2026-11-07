@@ -79,8 +79,9 @@ class SimNet {
   [[nodiscard]] std::size_t count_role(Role role) const {
     std::size_t n = 0;
     for (const auto& b : bridges_) {
-      for (PortId p = 0; p < b.rstp->num_ports(); ++p) {
-        n += (b.rstp->status(p).enabled && b.rstp->status(p).role == role) ? 1U : 0U;
+      for (std::size_t i = 0; i < b.rstp->num_ports(); ++i) {
+        const auto& st = b.rstp->status(static_cast<PortId>(i));
+        n += (st.enabled && st.role == role) ? 1U : 0U;
       }
     }
     return n;
