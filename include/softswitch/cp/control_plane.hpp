@@ -3,6 +3,7 @@
 /// @file
 /// softswitchd: owns configuration and protocol state, publishes tables to the data plane.
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "softswitch/cp/config.hpp"
 #include "softswitch/cp/event_loop.hpp"
 #include "softswitch/cp/netlink.hpp"
+#include "softswitch/igmp/snooper.hpp"
 #include "softswitch/l2/fdb.hpp"
 #include "softswitch/shm/publisher.hpp"
 #include "softswitch/shm/region.hpp"
@@ -75,6 +77,13 @@ class ControlPlane {
   void sync_stp();
   /// Queues an untagged frame for transmission on exactly @p port (bypassing VLAN and STP).
   void inject_raw(PortId port, std::span<const std::uint8_t> frame);
+  /// Queues an untagged frame to be forwarded within @p vlan as if it came from the CPU port.
+  void inject_vlan(VlanId vlan, std::span<const std::uint8_t> frame);
+  void inject(const shm::PacketMessage& prototype, std::span<const std::uint8_t> frame);
+  void on_igmp(const shm::PacketMessage& msg);
+  void igmp_tick();
+  /// Sends an IGMP query in @p vlan (general when @p group is 0.0.0.0).
+  void send_igmp_query(VlanId vlan, Ipv4Address group, std::uint8_t max_resp_tenths);
   void publish_now();
   void build_tables(shm::Tables& tables) const;
   /// Re-applies static MACs from the config and drops dynamic entries the config invalidated.
@@ -92,6 +101,7 @@ class ControlPlane {
   [[nodiscard]] std::string show_dataplane() const;
   [[nodiscard]] std::string show_mac(const std::vector<std::string>& tokens) const;
   [[nodiscard]] std::string show_spanning_tree() const;
+  [[nodiscard]] std::string show_igmp() const;
 
   EventLoop* loop_;
   ControlPlaneOptions options_;
@@ -102,6 +112,9 @@ class ControlPlane {
   std::unique_ptr<stp::Rstp> rstp_;
   std::vector<shm::StpState> stp_state_;
   std::uint64_t inject_drops_ = 0;
+  igmp::Snooper snooper_;
+  std::map<VlanId, stp::Clock::time_point> next_query_;  ///< Querier schedule per VLAN.
+  std::map<VlanId, int> startup_queries_left_;
   std::uint64_t learn_events_ = 0;
 
   sys::SharedMemory memory_;

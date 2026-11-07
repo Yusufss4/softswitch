@@ -266,6 +266,47 @@ CommandResult cmd_spanning_tree(SwitchConfig& c, const Tokens& t, bool negate) {
   return CommandResult::success();
 }
 
+// ip igmp snooping [vlan ID | querier | query-interval N | fast-leave]  (and the "no" forms)
+CommandResult cmd_ip(SwitchConfig& c, const Tokens& t, bool negate) {
+  if (t.size() >= 3 && t[1] == "igmp" && t[2] == "snooping") {
+    if (t.size() == 3) {
+      c.igmp_snooping = !negate;
+      return CommandResult::success();
+    }
+    if (t.size() == 5 && t[3] == "vlan") {
+      const auto vid = parse_vlan_id(t[4]);
+      if (!vid) {
+        return bad_vlan(t[4]);
+      }
+      if (negate) {
+        c.igmp_disabled_vlans.insert(*vid);
+      } else {
+        c.igmp_disabled_vlans.erase(*vid);
+      }
+      return CommandResult::success();
+    }
+    if (t.size() == 4 && t[3] == "querier") {
+      c.igmp_querier = !negate;
+      return CommandResult::success();
+    }
+    if (t.size() == 4 && t[3] == "fast-leave") {
+      c.igmp_fast_leave = !negate;
+      return CommandResult::success();
+    }
+    if (!negate && t.size() == 5 && t[3] == "query-interval") {
+      const auto secs = parse_uint(t[4], 3600);
+      if (!secs || *secs < 10) {
+        return CommandResult::error("query interval must be 10..3600 seconds");
+      }
+      c.igmp_query_interval = *secs;
+      return CommandResult::success();
+    }
+  }
+  return CommandResult::error(
+      "usage: [no] ip igmp snooping [vlan ID | querier | fast-leave] | ip igmp snooping "
+      "query-interval N");
+}
+
 }  // namespace
 
 VlanSet all_vlans() noexcept {
@@ -370,7 +411,7 @@ bool is_config_command(const std::vector<std::string>& t) noexcept {
   }
   const std::string& w = t[0] == "no" && t.size() > 1 ? t[1] : t[0];
   return w == "hostname" || w == "vlan" || w == "interface" || w == "trace" || w == "mac" ||
-         w == "spanning-tree";
+         w == "spanning-tree" || w == "ip";
 }
 
 CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
@@ -395,6 +436,12 @@ CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
   }
   if (t[0] == "trace") {
     return cmd_trace(c, t);
+  }
+  if (t[0] == "ip") {
+    return cmd_ip(c, t, false);
+  }
+  if (t[0] == "no" && t.size() > 1 && t[1] == "ip") {
+    return cmd_ip(c, Tokens(t.begin() + 1, t.end()), true);
   }
   if (t[0] == "spanning-tree") {
     return cmd_spanning_tree(c, t, false);
@@ -445,6 +492,21 @@ std::string render_running_config(const SwitchConfig& c) {
   }
   if (c.stp_forward_delay != defaults_cfg.stp_forward_delay) {
     out << "spanning-tree forward-time " << c.stp_forward_delay << "\n";
+  }
+  if (!c.igmp_snooping) {
+    out << "no ip igmp snooping\n";
+  }
+  for (const VlanId v : c.igmp_disabled_vlans) {
+    out << "no ip igmp snooping vlan " << v << "\n";
+  }
+  if (c.igmp_querier) {
+    out << "ip igmp snooping querier\n";
+  }
+  if (c.igmp_query_interval != defaults_cfg.igmp_query_interval) {
+    out << "ip igmp snooping query-interval " << c.igmp_query_interval << "\n";
+  }
+  if (!c.igmp_fast_leave) {
+    out << "no ip igmp snooping fast-leave\n";
   }
   for (const auto& m : c.static_macs) {
     out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "

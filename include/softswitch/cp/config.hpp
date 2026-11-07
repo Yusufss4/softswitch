@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -64,6 +65,16 @@ struct SwitchConfig {
   std::uint32_t stp_hello = 2;
   std::uint32_t stp_max_age = 20;
   std::uint32_t stp_forward_delay = 15;
+  bool igmp_snooping = true;  ///< Global switch; per-VLAN exceptions below.
+  std::set<VlanId> igmp_disabled_vlans;
+  bool igmp_querier = false;  ///< Send general queries (no router in the network).
+  std::uint32_t igmp_query_interval = 125;
+  bool igmp_fast_leave = true;  ///< Immediate leave on portfast (host) ports.
+
+  /// True if IGMP snooping is active in @p vlan.
+  [[nodiscard]] bool snooping_in(VlanId vlan) const noexcept {
+    return igmp_snooping && !igmp_disabled_vlans.contains(vlan);
+  }
   std::uint32_t trace_sample = 0;
 
   /// Builds a default config with one access port in VLAN 1 per name.

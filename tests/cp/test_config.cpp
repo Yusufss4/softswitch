@@ -126,6 +126,25 @@ TEST(ConfigCommands, SpanningTree) {
   EXPECT_FALSE(c.ports[0].stp_edge);
 }
 
+TEST(ConfigCommands, IgmpSnooping) {
+  auto c = sample();
+  EXPECT_TRUE(c.snooping_in(10));
+  EXPECT_TRUE(run(c, "no ip igmp snooping vlan 10").ok);
+  EXPECT_FALSE(c.snooping_in(10));
+  EXPECT_TRUE(c.snooping_in(20));
+  EXPECT_TRUE(run(c, "ip igmp snooping vlan 10").ok);
+  EXPECT_TRUE(c.snooping_in(10));
+  EXPECT_TRUE(run(c, "ip igmp snooping querier").ok);
+  EXPECT_TRUE(c.igmp_querier);
+  EXPECT_TRUE(run(c, "ip igmp snooping query-interval 30").ok);
+  EXPECT_FALSE(run(c, "ip igmp snooping query-interval 5").ok);
+  EXPECT_TRUE(run(c, "no ip igmp snooping fast-leave").ok);
+  EXPECT_FALSE(c.igmp_fast_leave);
+  EXPECT_TRUE(run(c, "no ip igmp snooping").ok);
+  EXPECT_FALSE(c.snooping_in(20));
+  EXPECT_FALSE(run(c, "ip igmp frobnicate").ok);
+}
+
 TEST(ConfigCommands, IsConfigCommand) {
   EXPECT_TRUE(is_config_command(tokenize("vlan 10")));
   EXPECT_TRUE(is_config_command(tokenize("no vlan 10")));
