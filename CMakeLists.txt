@@ -26,19 +26,27 @@ include(SoftswitchOptions)   # defines softswitch::options (warnings, sanitizers
 configure_file(include/softswitch/version.hpp.in
                "${CMAKE_CURRENT_BINARY_DIR}/generated/softswitch/version.hpp" @ONLY)
 
-# ---- core library -----------------------------------------------------------
-add_library(softswitch_core
+# ---- libraries ---------------------------------------------------------------
+# softswitch::proto: pure protocol logic (no syscalls); unit-tested and fuzzed.
+add_library(softswitch_proto
+  src/common/types.cpp
   src/mac_table.cpp
+  src/pkt/arp.cpp
+  src/pkt/bpdu.cpp
+  src/pkt/ethernet.cpp
+  src/pkt/icmp.cpp
+  src/pkt/igmp.cpp
+  src/pkt/ipv4.cpp
 )
-add_library(softswitch::core ALIAS softswitch_core)
-target_include_directories(softswitch_core PUBLIC
+add_library(softswitch::proto ALIAS softswitch_proto)
+target_include_directories(softswitch_proto PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(softswitch_core PUBLIC softswitch::options)
+target_link_libraries(softswitch_proto PUBLIC softswitch::options)
 
 # ---- executables ------------------------------------------------------------
 add_executable(softswitch src/main.cpp)
-target_link_libraries(softswitch PRIVATE softswitch::core)
+target_link_libraries(softswitch PRIVATE softswitch::proto)
 
 # ---- tests / benchmarks / fuzzers -------------------------------------------
 if(SOFTSWITCH_BUILD_TESTS)
