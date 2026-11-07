@@ -18,6 +18,10 @@ cmake --preset dev >/dev/null
 cmake --build --preset dev
 ctest --preset dev
 
+step "optimized build (release, catches -O2-only warnings)"
+cmake --preset release >/dev/null
+cmake --build --preset release
+
 step "clang-tidy"
 CLANG_TIDY=${CLANG_TIDY:-$(command -v clang-tidy-18 || echo clang-tidy)} scripts/clang-tidy.sh build/dev
 
