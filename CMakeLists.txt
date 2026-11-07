@@ -32,6 +32,7 @@ add_library(softswitch_proto
   src/common/log.cpp
   src/common/types.cpp
   src/cp/config.cpp
+  src/cp/netlink_parse.cpp
   src/cp/text_table.cpp
   src/dp/pipeline.cpp
   src/l2/fdb.cpp
@@ -57,6 +58,7 @@ add_library(softswitch_runtime
   src/cp/cli_server.cpp
   src/cp/control_plane.cpp
   src/cp/event_loop.cpp
+  src/cp/netlink.cpp
   src/cp/show.cpp
   src/dp/af_packet_port.cpp
   src/dp/dataplane.cpp
