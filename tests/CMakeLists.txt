@@ -9,6 +9,7 @@ add_executable(softswitch_tests
   dp/test_pipeline_learning.cpp
   dp/test_pipeline_vlan.cpp
   l2/test_fdb.cpp
+  stp/test_rstp.cpp
   pkt/test_ethernet.cpp
   pkt/test_igmp_bpdu.cpp
   pkt/test_ipv4_icmp_arp.cpp
