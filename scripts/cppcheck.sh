@@ -9,7 +9,7 @@ OUT=reports/cppcheck
 rm -rf "$OUT" && mkdir -p "$OUT"
 [[ -f "$BUILD_DIR/compile_commands.json" ]] || { echo "no compile_commands.json in $BUILD_DIR" >&2; exit 2; }
 
-echo "$(cppcheck --version)"
+cppcheck --version
 cppcheck \
   --project="$BUILD_DIR/compile_commands.json" \
   --file-filter="src/*" \
