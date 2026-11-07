@@ -12,7 +12,7 @@ like the software stack on a Marvell or Broadcom switch: a **control plane** own
 configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
 packets using tables the control plane publishes through shared memory.
 
-> **Status:** early development (M0: project infrastructure). See the
+> **Status:** M1, the split control/data plane with flood-only forwarding. See the
 > [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
 
 ## Planned features
