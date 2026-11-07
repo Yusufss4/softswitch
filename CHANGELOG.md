@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CLI: switch configuration model (VLANs, access/trunk ports, native VLAN, allowed VLAN lists,
+  descriptions, shutdown, MAC aging time, trace sampling) with Cisco-style one-line commands.
+- `show version | running-config | interfaces | vlan | counters | dataplane`; `show
+  running-config` output replays as a startup config (round-trip tested and fuzzed).
+- CLI Unix socket in `softswitchd` and the `sscli` client (one-shot or interactive);
+  `softswitchd --config FILE` loads a startup config.
+- Startup configs for the test topology (`configs/sw{1,2,3}.conf`): VLAN 10/20 with 802.1Q trunks.
+- `fuzz_config` fuzz target with a seed corpus under `fuzz/corpus/config`.
+
 ## [0.2.0] - 2026-11-07
 
 ### Added
