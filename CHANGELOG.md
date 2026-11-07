@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
 ### Added
 - IGMP snooping (RFC 4541): `igmp::Snooper` tracks members per (VLAN, group) with membership
   timeouts and mrouter ports learned from queries. The data plane punts IGMP as a copy, floods
@@ -128,7 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Yusufss4/softswitch/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Yusufss4/softswitch/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Yusufss4/softswitch/compare/v0.1.0...v0.2.0
