@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   none, ingress filtering on VLAN membership, egress only to members with per-port tagging, and
   IEEE reserved group addresses (01:80:C2:00:00:0x) never forwarded. Drops are counted per reason.
 - `fuzz_pipeline` fuzz target asserting the VLAN forwarding invariants on arbitrary frames.
+- MAC learning and aging: the control plane owns the FDB (`l2::Fdb`, keyed by MAC+VLAN); the data
+  plane reports new and moved source MACs on the learn ring (with 10 ms repeat suppression) and
+  marks hits in a hash-indexed bitmap the control plane harvests every second for aging.
+- Known unicast is forwarded to a single port; frames to the ingress port are filtered; unknown
+  unicast, broadcast and multicast are flooded within the VLAN.
+- `show mac address-table [vlan ID] [interface PORT]`, `clear mac address-table`,
+  `mac address-table static MAC vlan ID interface PORT`; entries invalidated by configuration
+  (port shut down, VLAN pruned) are flushed.
+- STP port state honoured on ingress: discarding ports neither learn nor forward, learning ports
+  only learn.
+- `fuzz_fdb` fuzz target and FDB learn/publish benchmarks.
+
+### Removed
+- `MacTable` (replaced by `l2::Fdb`).
 
 ## [0.2.0] - 2026-11-07
 
