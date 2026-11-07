@@ -1,4 +1,6 @@
 # Interface target that carries project-wide warnings, sanitizer and coverage flags.
+# -Wnull-dereference is deliberately absent: GCC 12/13 report false positives on inlined
+# std::vector::data() at -O2. Null dereferences are caught by UBSan and clang-tidy instead.
 # Link it into every first-party target; third-party code (gtest, benchmark) stays unaffected.
 add_library(softswitch_options INTERFACE)
 add_library(softswitch::options ALIAS softswitch_options)
@@ -6,7 +8,7 @@ add_library(softswitch::options ALIAS softswitch_options)
 target_compile_options(softswitch_options INTERFACE
   -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
   -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Woverloaded-virtual
-  -Wnull-dereference -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough)
+  -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough)
 if(SOFTSWITCH_WERROR)
   target_compile_options(softswitch_options INTERFACE -Werror)
 endif()

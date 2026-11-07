@@ -83,7 +83,7 @@
       "name": "base",
       "hidden": true,
       "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error" },
+      "execution": { "noTestsAction": "error", "jobs": 4 },
       "filter": { "exclude": { "label": "integration" } }
     },
     { "name": "dev", "inherits": "base", "configurePreset": "dev" },
