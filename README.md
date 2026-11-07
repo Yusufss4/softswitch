@@ -28,8 +28,9 @@ packets using tables the control plane publishes through shared memory.
 ## Try it
 
     cmake --preset release && cmake --build --preset release
-    scripts/topo.sh up && scripts/switches.sh start      # 3 switches, 5 hosts (netns)
+    scripts/topo.sh up --loop && scripts/switches.sh start   # 3 switches in a loop, 5 hosts
     sudo ip netns exec h1 ping 10.0.10.13                 # h1 -> h3 across two switches
+    build/release/sscli -s sw2 show spanning-tree        # one port blocks the loop
     build/release/sscli -s sw1 show mac address-table
     build/release/sscli -s sw1                            # interactive CLI
     scripts/switches.sh stop && scripts/topo.sh down
