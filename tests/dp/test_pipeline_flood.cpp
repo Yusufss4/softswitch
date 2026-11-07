@@ -49,6 +49,7 @@ TEST(PipelineFlood, DropsRuntFrames) {
 
 TEST(PipelineFlood, InBandTagIsStrippedForUntaggedEgress) {
   PipelineHarness h(2);
+  h.tables.ports[0].mode = shm::PortMode::kTrunk;  // tagged ingress needs a trunk
   const auto frame = FrameBuilder{}
                          .mac("ff:ff:ff:ff:ff:ff")
                          .mac("02:00:00:00:00:01")

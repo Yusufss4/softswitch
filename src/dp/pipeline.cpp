@@ -114,24 +114,55 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
     }
   }
   c.eth = *eth;
+  // ---- 802.1Q ingress: pick the VLAN, then filter ---------------------------------------
   const auto& port = tables.ports[in_port];
   const VlanId tagged_vid = c.was_tagged ? pkt::tci_vid(tci) : VlanId{0};
-  c.vlan = tagged_vid != 0 ? tagged_vid : port.pvid;  // VID 0 = priority-tagged
-  if (!valid_vlan(c.vlan)) {
-    drop(in_port, DropReason::kUntaggedNotAllowed);
-    trace(tables, in_port, c, Decision::kDrop, DropReason::kUntaggedNotAllowed, 0, 0);
+  if (tagged_vid != 0) {  // VID 0 is priority-tagged: treated as untagged
+    if (port.mode == shm::PortMode::kAccess) {
+      reject(tables, in_port, c, DropReason::kTaggedOnAccess);
+      return;
+    }
+    c.vlan = tagged_vid;
+  } else {
+    if (port.pvid == 0) {
+      reject(tables, in_port, c, DropReason::kUntaggedNotAllowed);
+      return;
+    }
+    c.vlan = port.pvid;
+  }
+  const shm::VlanEntry& vlan = tables.vlans[c.vlan];
+  if (!valid_vlan(c.vlan) || (vlan.flags & shm::vlan_flag::kActive) == 0 ||
+      !has_port(vlan.members, in_port)) {
+    reject(tables, in_port, c, DropReason::kVlanNotMember);
     return;
   }
 
-  // ---- M1: flood within the VLAN to every other forwarding member -------------------------
-  const PortMask out = tables.vlans[c.vlan].members & forwarding_ports(tables) & ~port_bit(in_port);
+  // ---- link-local control frames (01:80:c2:00:00:0x) are never forwarded ------------------
+  if (is_reserved_multicast(c.eth.dst)) {
+    reject(tables, in_port, c, DropReason::kReservedMulticast);
+    return;
+  }
+
+  // ---- forward: flood within the VLAN (FDB lookup arrives with MAC learning) ----------------
+  const PortMask out = vlan.members & forwarding_ports(tables) & ~port_bit(in_port);
   if (out == 0) {
-    drop(in_port, DropReason::kNoEgress);
-    trace(tables, in_port, c, Decision::kDrop, DropReason::kNoEgress, 0, c.vlan);
+    reject(tables, in_port, c, DropReason::kNoEgress);
     return;
   }
   emit_to(tables, out, c.vlan, c.untagged, egress);
   trace(tables, in_port, c, Decision::kFlood, DropReason::kNone, out, c.vlan);
+}
+
+void Pipeline::reject(const Tables& tables, PortId in_port, const Classified& c,
+                      DropReason reason) noexcept {
+  drop(in_port, reason);
+  trace(tables, in_port, c, Decision::kDrop, reason, 0, c.vlan);
+}
+
+bool Pipeline::is_reserved_multicast(const MacAddress& dst) noexcept {
+  const auto& b = dst.bytes;
+  return b[0] == 0x01 && b[1] == 0x80 && b[2] == 0xC2 && b[3] == 0x00 && b[4] == 0x00 &&
+         b[5] <= 0x0F;
 }
 
 void Pipeline::process_inject(const Tables& tables, const shm::PacketMessage& msg,

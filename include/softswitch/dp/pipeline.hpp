@@ -47,6 +47,11 @@ class Pipeline {
   void emit_to(const shm::Tables& tables, PortMask ports, VlanId vlan,
                std::span<const std::uint8_t> frame, Egress& egress) noexcept;
   void drop(PortId in_port, shm::DropReason reason) noexcept;
+  /// drop() plus a trace record.
+  void reject(const shm::Tables& tables, PortId in_port, const Classified& c,
+              shm::DropReason reason) noexcept;
+  /// IEEE 802.1D reserved group addresses 01:80:C2:00:00:00-0F (BPDUs, LACP, LLDP, ...).
+  [[nodiscard]] static bool is_reserved_multicast(const MacAddress& dst) noexcept;
   void trace(const shm::Tables& tables, PortId in_port, const Classified& c, shm::Decision decision,
              shm::DropReason reason, PortMask out_ports, VlanId out_vlan) noexcept;
   [[nodiscard]] static PortMask forwarding_ports(const shm::Tables& tables) noexcept;
