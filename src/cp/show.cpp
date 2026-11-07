@@ -59,16 +59,6 @@ const char* drop_reason_name(shm::DropReason r) {
   return "?";
 }
 
-std::string ports_in(PortMask mask, const SwitchConfig& c) {
-  std::string out;
-  for (std::size_t i = 0; i < c.ports.size(); ++i) {
-    if (has_port(mask, static_cast<PortId>(i))) {
-      out += (out.empty() ? "" : ",") + c.ports[i].name;
-    }
-  }
-  return out.empty() ? "-" : out;
-}
-
 constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "vlan ID [name NAME] | no vlan ID\n"
@@ -137,11 +127,20 @@ std::string ControlPlane::show_interfaces() const {
 
 std::string ControlPlane::show_vlan() const {
   const shm::Tables& live = publisher_->live();
+  const auto ports_in = [this](PortMask mask) {
+    std::string out;
+    for (std::size_t i = 0; i < config_.ports.size(); ++i) {
+      if (has_port(mask, static_cast<PortId>(i))) {
+        out += (out.empty() ? "" : ",") + config_.ports[i].name;
+      }
+    }
+    return out.empty() ? std::string("-") : out;
+  };
   TextTable table({"VLAN", "Name", "Untagged", "Tagged"});
   for (const auto& [vid, vlan] : config_.vlans) {
     const auto& e = live.vlans[vid];
-    table.add_row({std::to_string(vid), vlan.name, ports_in(e.untagged, config_),
-                   ports_in(e.members & ~e.untagged, config_)});
+    table.add_row(
+        {std::to_string(vid), vlan.name, ports_in(e.untagged), ports_in(e.members & ~e.untagged)});
   }
   return table.render();
 }
