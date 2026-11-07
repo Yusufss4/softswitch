@@ -12,7 +12,7 @@ like the software stack on a Marvell or Broadcom switch: a **control plane** own
 configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
 packets using tables the control plane publishes through shared memory.
 
-> **Status:** M1, the split control/data plane with flood-only forwarding. See the
+> **Status:** M2 done: 802.1Q VLANs, MAC learning/aging and a CLI on the split control/data plane. See the
 > [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
 
 ## Planned features
@@ -24,6 +24,15 @@ packets using tables the control plane publishes through shared memory.
 - Control plane: CLI and rtnetlink. Data plane: AF_PACKET (TPACKET_V3), SCHED_FIFO, lock-free IPC
 - A read-only web GUI that shows live forwarding decisions
 - Benchmarks: packets per second, a latency histogram and perf profiles
+
+## Try it
+
+    cmake --preset release && cmake --build --preset release
+    scripts/topo.sh up && scripts/switches.sh start      # 3 switches, 5 hosts (netns)
+    sudo ip netns exec h1 ping 10.0.10.13                 # h1 -> h3 across two switches
+    build/release/sscli -s sw1 show mac address-table
+    build/release/sscli -s sw1                            # interactive CLI
+    scripts/switches.sh stop && scripts/topo.sh down
 
 ## Build
 
