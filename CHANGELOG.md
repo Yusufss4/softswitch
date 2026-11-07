@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - RSTP simulation tests (triangle convergence, failover, silent failure, root loss, priority
   change, edge, fallback, backup port) and a property test over 500 random meshes asserting a
   loop-free spanning tree after convergence and after link failures; `fuzz_rstp` fuzz target.
+- rtnetlink link monitoring in `softswitchd`: an initial RTM_GETLINK dump plus RTMGRP_LINK
+  events set each port's operational state (admin up and carrier); a port going down flushes the
+  MACs learned on it. Re-dumps after a netlink overrun. Bounds-checked parser with tests and a
+  `fuzz_netlink` target.
 
 ## [0.3.0] - 2026-11-07
 
