@@ -45,5 +45,5 @@ jobs:
             deps
             release
           requireScope: false
-          subjectPattern: ^[a-z].+[^.]$
-          subjectPatternError: Subject must start lowercase and not end with a period.
+          subjectPattern: ^.+[^.]$
+          subjectPatternError: The PR title subject must not end with a period.
