@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Reduced Rapid Spanning Tree state machine (`stp::Rstp`): priority-vector role selection,
+  proposal/agreement with sync, instant alternate-to-root failover, forward-delay fallback,
+  received-information expiry, edge ports and topology-change flushing/propagation. Agreements
+  from root ports are only accepted from bridges that are really downstream, which closes the
+  forwarding loop RSTP's count-to-infinity can otherwise open after a root bridge is lost.
+- RSTP simulation tests (triangle convergence, failover, silent failure, root loss, priority
+  change, edge, fallback, backup port) and a property test over 500 random meshes asserting a
+  loop-free spanning tree after convergence and after link failures; `fuzz_rstp` fuzz target.
+
 ## [0.3.0] - 2026-11-07
 
 ### Added
