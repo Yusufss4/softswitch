@@ -11,6 +11,7 @@
 #include "softswitch/cp/cli_server.hpp"
 #include "softswitch/cp/config.hpp"
 #include "softswitch/cp/event_loop.hpp"
+#include "softswitch/l2/fdb.hpp"
 #include "softswitch/shm/publisher.hpp"
 #include "softswitch/shm/region.hpp"
 #include "softswitch/sys/fd.hpp"
@@ -65,6 +66,11 @@ class ControlPlane {
   void on_notify();
   void publish_now();
   void build_tables(shm::Tables& tables) const;
+  /// Re-applies static MACs from the config and drops dynamic entries the config invalidated.
+  void reconcile_fdb();
+  /// Folds the data plane's hit bitmap into the FDB and ages out idle entries.
+  void age_fdb();
+  [[nodiscard]] std::string clear(const std::vector<std::string>& tokens);
 
   // show commands (show.cpp)
   [[nodiscard]] std::string show(const std::vector<std::string>& tokens) const;
@@ -73,12 +79,15 @@ class ControlPlane {
   [[nodiscard]] std::string show_vlan() const;
   [[nodiscard]] std::string show_counters() const;
   [[nodiscard]] std::string show_dataplane() const;
+  [[nodiscard]] std::string show_mac(const std::vector<std::string>& tokens) const;
 
   EventLoop* loop_;
   ControlPlaneOptions options_;
   MacAddress bridge_mac_;
   SwitchConfig config_;
   std::vector<PortRuntime> runtime_;
+  l2::Fdb fdb_{shm::kFdbSlots / 2};
+  std::uint64_t learn_events_ = 0;
 
   sys::SharedMemory memory_;
   shm::SharedRegion* region_ = nullptr;

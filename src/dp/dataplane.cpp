@@ -209,6 +209,7 @@ void DataPlane::forward_loop() noexcept {
 
     const std::uint64_t batch_start = sys::monotonic_ns();
     const shm::Tables& tables = reader.enter();
+    pipeline.set_now(batch_start);
     std::uint64_t received = 0;
     for (std::size_t p = 0; p < ports_.size(); ++p) {
       const std::size_t n = ports_[p]->rx_burst(frames);

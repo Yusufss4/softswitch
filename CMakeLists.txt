@@ -34,7 +34,7 @@ add_library(softswitch_proto
   src/cp/config.cpp
   src/cp/text_table.cpp
   src/dp/pipeline.cpp
-  src/mac_table.cpp
+  src/l2/fdb.cpp
   src/pkt/arp.cpp
   src/pkt/bpdu.cpp
   src/pkt/ethernet.cpp

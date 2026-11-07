@@ -41,6 +41,13 @@ struct VlanConfig {
   friend bool operator==(const VlanConfig&, const VlanConfig&) = default;
 };
 
+struct StaticMac {
+  MacAddress mac;
+  VlanId vlan = 0;
+  std::string port;
+  friend bool operator==(const StaticMac&, const StaticMac&) = default;
+};
+
 inline constexpr std::uint32_t kDefaultMacAgingSeconds = 300;
 
 struct SwitchConfig {
@@ -48,6 +55,7 @@ struct SwitchConfig {
   std::vector<PortConfig> ports;
   std::map<VlanId, VlanConfig> vlans{{VlanId{1}, VlanConfig{"default"}}};
   std::uint32_t mac_aging_seconds = kDefaultMacAgingSeconds;
+  std::vector<StaticMac> static_macs;
   std::uint32_t trace_sample = 0;
 
   /// Builds a default config with one access port in VLAN 1 per name.
@@ -91,6 +99,9 @@ struct CommandResult {
 
 /// The configuration as replayable command lines.
 [[nodiscard]] std::string render_running_config(const SwitchConfig& config);
+
+/// True if @p port is administratively up and a member of existing VLAN @p vlan.
+[[nodiscard]] bool port_in_vlan(const SwitchConfig& config, PortId port, VlanId vlan) noexcept;
 
 /// Writes ports (name, admin state, mode, PVID) and VLAN membership into @p tables.
 /// Operational state (oper up, STP state, ifindex, MACs) is left to the caller.

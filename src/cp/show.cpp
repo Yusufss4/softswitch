@@ -1,5 +1,7 @@
 // `show` commands of softswitchd.
+#include <algorithm>
 #include <chrono>
+#include <optional>
 #include <sstream>
 
 #include "softswitch/cp/control_plane.hpp"
@@ -61,6 +63,8 @@ const char* drop_reason_name(shm::DropReason r) {
 
 constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
+    "show mac address-table [vlan ID] [interface PORT]\n"
+    "clear mac address-table [dynamic] [vlan ID] [interface PORT]\n"
     "vlan ID [name NAME] | no vlan ID\n"
     "interface PORT description TEXT | shutdown | no shutdown\n"
     "interface PORT switchport mode access|trunk\n"
@@ -68,6 +72,8 @@ constexpr const char* kHelp =
     "interface PORT switchport trunk allowed vlan [add|remove] LIST\n"
     "interface PORT switchport trunk native vlan ID\n"
     "mac address-table aging-time SECONDS\n"
+    "mac address-table static MAC vlan ID interface PORT | no mac address-table static MAC vlan "
+    "ID\n"
     "trace sample N\n"
     "hostname NAME\n";
 
@@ -92,6 +98,9 @@ std::string ControlPlane::show(const std::vector<std::string>& t) const {
   }
   if (what == "dataplane") {
     return show_dataplane();
+  }
+  if (what == "mac") {
+    return show_mac(t);
   }
   if (what == "help") {
     return kHelp;
@@ -162,6 +171,41 @@ std::string ControlPlane::show_counters() const {
   return ports.render() + "\n" + (drops.empty() ? std::string("no drops\n") : drops.render());
 }
 
+std::string ControlPlane::show_mac(const std::vector<std::string>& t) const {
+  std::optional<VlanId> vlan;
+  std::optional<PortId> port;
+  for (std::size_t i = 3; i + 1 < t.size(); i += 2) {
+    if (t[i] == "vlan") {
+      vlan = static_cast<VlanId>(std::stoul(t[i + 1]));
+    } else if (t[i] == "interface") {
+      port = config_.port_index(t[i + 1]);
+      if (!port) {
+        return "% no such interface '" + t[i + 1] + "'\n";
+      }
+    }
+  }
+  std::vector<const l2::FdbEntry*> rows;
+  for (const auto& [key, e] : fdb_.entries()) {
+    if ((!vlan || e.vlan == *vlan) && (!port || e.port == *port)) {
+      rows.push_back(&e);
+    }
+  }
+  std::sort(rows.begin(), rows.end(), [](const auto* a, const auto* b) {
+    return a->vlan != b->vlan ? a->vlan < b->vlan : a->mac < b->mac;
+  });
+  const auto now = l2::Fdb::Clock::now();
+  TextTable table({"VLAN", "MAC address", "Type", "Port", "Age"});
+  for (const auto* e : rows) {
+    const auto age = std::chrono::duration_cast<std::chrono::seconds>(now - e->last_seen).count();
+    table.add_row({std::to_string(e->vlan), e->mac.to_string(), e->is_static ? "static" : "dynamic",
+                   config_.ports[e->port].name, e->is_static ? "-" : std::to_string(age) + "s"});
+  }
+  return table.render() + "total " + std::to_string(rows.size()) + " of " +
+         std::to_string(fdb_.size()) + " entries; aging " +
+         std::to_string(config_.mac_aging_seconds) + "s; moves " + std::to_string(fdb_.moves()) +
+         "\n";
+}
+
 std::string ControlPlane::show_dataplane() const {
   const auto& dp = region_->dp;
   const std::uint64_t now = sys::monotonic_ns();
@@ -173,6 +217,7 @@ std::string ControlPlane::show_dataplane() const {
       << (beat == 0 ? std::string("never") : u64((now - beat) / 1000) + " us") << "\n"
       << "batches:         " << get(dp.batches) << "\n"
       << "rx/tx packets:   " << get(dp.rx_packets) << " / " << get(dp.tx_packets) << "\n"
+      << "learn events:    " << get(dp.learn_events) << " sent, " << learn_events_ << " processed\n"
       << "max batch time:  " << get(dp.max_batch_ns) / 1000 << " us\n"
       << "table publishes: " << publishes_ << " (seq " << publisher_->sequence() << ", acked "
       << dp.ack_seq.load() << ")\n"

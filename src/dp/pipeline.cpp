@@ -143,14 +143,77 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
     return;
   }
 
-  // ---- forward: flood within the VLAN (FDB lookup arrives with MAC learning) ----------------
-  const PortMask out = vlan.members & forwarding_ports(tables) & ~port_bit(in_port);
+  // ---- spanning tree: discarding ports neither learn nor forward; learning ports only learn
+  if (port.stp_state != StpState::kForwarding && port.stp_state != StpState::kLearning) {
+    reject(tables, in_port, c, DropReason::kStpBlocked);
+    return;
+  }
+  learn_source(tables, in_port, c);
+  if (port.stp_state == StpState::kLearning) {
+    reject(tables, in_port, c, DropReason::kStpBlocked);
+    return;
+  }
+
+  const PortMask forwarding = vlan.members & forwarding_ports(tables);
+
+  // ---- known unicast: one port ------------------------------------------------------------
+  if (!c.eth.dst.is_multicast()) {
+    if (const shm::FdbSlot* slot = shm::fdb_lookup(tables, c.eth.dst, c.vlan)) {
+      if (slot->port == in_port) {
+        reject(tables, in_port, c, DropReason::kSameSegment);
+        return;
+      }
+      const PortMask out = port_bit(slot->port) & forwarding;
+      if (out != 0) {
+        emit_to(tables, out, c.vlan, c.untagged, egress);
+        trace(tables, in_port, c, Decision::kForward, DropReason::kNone, out, c.vlan);
+        return;
+      }
+      // The learned port is down or blocked: fall back to flooding until the entry is flushed.
+    }
+  }
+
+  // ---- unknown unicast, broadcast, multicast: flood within the VLAN -------------------------
+  const PortMask out = forwarding & ~port_bit(in_port);
   if (out == 0) {
     reject(tables, in_port, c, DropReason::kNoEgress);
     return;
   }
   emit_to(tables, out, c.vlan, c.untagged, egress);
   trace(tables, in_port, c, Decision::kFlood, DropReason::kNone, out, c.vlan);
+}
+
+void Pipeline::learn_source(const Tables& tables, PortId in_port, const Classified& c) noexcept {
+  const MacAddress& src = c.eth.src;
+  if (src.is_multicast() || src.is_zero()) {
+    return;  // never learn group or null addresses
+  }
+  const shm::FdbSlot* slot = shm::fdb_lookup(tables, src, c.vlan);
+  if (slot != nullptr && slot->port == in_port) {
+    // Known here: mark it alive for aging. Read first so steady state costs no atomic RMW.
+    const std::uint64_t bit = shm::fdb_hash(src, c.vlan) & (shm::kHitBits - 1);
+    auto& word = region_->dp.fdb_hits[bit / 64];
+    const std::uint64_t mask = std::uint64_t{1} << (bit % 64);
+    if ((word.load(std::memory_order_relaxed) & mask) == 0) {
+      word.fetch_or(mask, std::memory_order_relaxed);
+    }
+    return;
+  }
+  if (slot != nullptr && (slot->flags & shm::slot_flag::kStatic) != 0) {
+    return;  // pinned to another port by configuration
+  }
+  // New or moved. The control plane needs a few ms to publish it, so suppress repeats.
+  const std::uint64_t key = (src.to_u64() << 16U) | c.vlan;
+  RecentLearn& recent = recent_learns_[mix64(key) & (recent_learns_.size() - 1)];
+  if (recent.key == key && recent.port == in_port &&
+      now_ns_ - recent.timestamp_ns < kLearnRepeatNs) {
+    return;
+  }
+  if (region_->learn.try_push(shm::LearnEvent{src, c.vlan, in_port})) {
+    recent = RecentLearn{key, now_ns_, in_port};
+    shm::bump(region_->dp.learn_events);
+    notify_ = true;
+  }
 }
 
 void Pipeline::reject(const Tables& tables, PortId in_port, const Classified& c,

@@ -3,11 +3,12 @@ include(GoogleTest)
 
 # Pure-logic unit tests (no privileges, no network).
 add_executable(softswitch_tests
-  test_mac_table.cpp
   test_types.cpp
   cp/test_config.cpp
   dp/test_pipeline_flood.cpp
+  dp/test_pipeline_learning.cpp
   dp/test_pipeline_vlan.cpp
+  l2/test_fdb.cpp
   pkt/test_ethernet.cpp
   pkt/test_igmp_bpdu.cpp
   pkt/test_ipv4_icmp_arp.cpp

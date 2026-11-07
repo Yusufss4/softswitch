@@ -1,7 +1,7 @@
 find_package(benchmark REQUIRED)
 
 add_executable(softswitch_bench
-  bench_mac_table.cpp
+  bench_fdb.cpp
   bench_pkt.cpp
   bench_shm.cpp
 )
