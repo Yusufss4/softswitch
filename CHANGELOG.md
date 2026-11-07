@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
 ### Added
 - CLI: switch configuration model (VLANs, access/trunk ports, native VLAN, allowed VLAN lists,
   descriptions, shutdown, MAC aging time, trace sampling) with Cisco-style one-line commands.
@@ -80,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Yusufss4/softswitch/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Yusufss4/softswitch/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Yusufss4/softswitch/releases/tag/v0.1.0
