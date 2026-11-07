@@ -1,0 +1,30 @@
+---
+# Disabled checks and why:
+#  - trailing-return-type, magic-numbers: style noise for protocol code full of constants.
+#  - easily-swappable-parameters: (port, vlan) pairs are idiomatic here.
+#  - pro-bounds-pointer-arithmetic / pro-type-reinterpret-cast / pro-bounds-constant-array-index:
+#    packet parsing works on raw buffers by design; parsers are bounds-checked and fuzzed instead.
+#  - avoid-do-while: used in macros.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-avoid-do-while,
+  readability-container-size-empty,
+  readability-make-member-function-const,
+  readability-redundant-*,
+  readability-simplify-boolean-expr,
+  misc-unused-*,
+  misc-definitions-in-headers
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/(include|src)/.*'
+FormatStyle: file
+...

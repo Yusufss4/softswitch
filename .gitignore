@@ -1,3 +1,7 @@
 build/
+reports/
 .cache/
 compile_commands.json
+crash-*
+leak-*
+timeout-*
