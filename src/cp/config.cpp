@@ -173,8 +173,8 @@ CommandResult cmd_trace(SwitchConfig& c, const Tokens& t) {
   return CommandResult::error("usage: trace sample N");
 }
 
-CommandResult cmd_mac(SwitchConfig& c, const Tokens& t) {
-  if (t.size() == 4 && t[1] == "address-table" && t[2] == "aging-time") {
+CommandResult cmd_mac(SwitchConfig& c, const Tokens& t, bool negate) {
+  if (!negate && t.size() == 4 && t[1] == "address-table" && t[2] == "aging-time") {
     const auto secs = parse_uint(t[3], 1'000'000);
     if (!secs || *secs < 10) {
       return CommandResult::error("aging time must be 10..1000000 seconds");
@@ -182,7 +182,34 @@ CommandResult cmd_mac(SwitchConfig& c, const Tokens& t) {
     c.mac_aging_seconds = *secs;
     return CommandResult::success();
   }
-  return CommandResult::error("usage: mac address-table aging-time SECONDS");
+  // mac address-table static MAC vlan ID interface PORT
+  // no mac address-table static MAC vlan ID
+  const std::size_t need = negate ? 6 : 8;
+  if (t.size() == need && t[1] == "address-table" && t[2] == "static" && t[4] == "vlan" &&
+      (negate || t[6] == "interface")) {
+    const auto mac = MacAddress::parse(t[3]);
+    if (!mac || mac->is_multicast() || mac->is_zero()) {
+      return CommandResult::error("invalid unicast MAC address '" + t[3] + "'");
+    }
+    const auto vid = parse_vlan_id(t[5]);
+    if (!vid) {
+      return bad_vlan(t[5]);
+    }
+    const auto same = [&](const StaticMac& m) { return m.mac == *mac && m.vlan == *vid; };
+    if (negate) {
+      return std::erase_if(c.static_macs, same) != 0 ? CommandResult::success()
+                                                     : CommandResult::unchanged();
+    }
+    if (!c.port_index(t[7])) {
+      return CommandResult::error("no such interface '" + t[7] + "'");
+    }
+    std::erase_if(c.static_macs, same);
+    c.static_macs.push_back(StaticMac{*mac, *vid, t[7]});
+    return CommandResult::success();
+  }
+  return CommandResult::error(
+      "usage: mac address-table aging-time SECONDS | mac address-table static MAC vlan ID "
+      "interface PORT");
 }
 
 }  // namespace
@@ -315,7 +342,10 @@ CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
     return cmd_trace(c, t);
   }
   if (t[0] == "mac") {
-    return cmd_mac(c, t);
+    return cmd_mac(c, t, false);
+  }
+  if (t[0] == "no" && t.size() > 1 && t[1] == "mac") {
+    return cmd_mac(c, Tokens(t.begin() + 1, t.end()), true);
   }
   return CommandResult::error("unknown command '" + t[0] + "'");
 }
@@ -338,6 +368,10 @@ std::string render_running_config(const SwitchConfig& c) {
   }
   if (c.mac_aging_seconds != kDefaultMacAgingSeconds) {
     out << "mac address-table aging-time " << c.mac_aging_seconds << "\n";
+  }
+  for (const auto& m : c.static_macs) {
+    out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "
+        << m.port << "\n";
   }
   if (c.trace_sample != 0) {
     out << "trace sample " << c.trace_sample << "\n";
@@ -366,6 +400,17 @@ std::string render_running_config(const SwitchConfig& c) {
     }
   }
   return out.str();
+}
+
+bool port_in_vlan(const SwitchConfig& c, PortId port, VlanId vlan) noexcept {
+  if (port >= c.ports.size() || !c.vlan_exists(vlan)) {
+    return false;
+  }
+  const PortConfig& p = c.ports[port];
+  if (p.shutdown) {
+    return false;
+  }
+  return p.mode == shm::PortMode::kAccess ? p.access_vlan == vlan : p.trunk_allowed.test(vlan);
 }
 
 void apply_l2_config(const SwitchConfig& c, shm::Tables& t) {

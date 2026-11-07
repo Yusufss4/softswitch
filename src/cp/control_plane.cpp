@@ -94,6 +94,9 @@ std::string ControlPlane::execute(const std::string& line) {
   if (tokens[0] == "show") {
     return show(tokens);
   }
+  if (tokens[0] == "clear") {
+    return clear(tokens);
+  }
   if (!is_config_command(tokens)) {
     return "% unknown command '" + tokens[0] + "' (try 'show help')\n";
   }
@@ -103,6 +106,7 @@ std::string ControlPlane::execute(const std::string& line) {
   }
   if (result.changed) {
     log::info("config: ", line);
+    reconcile_fdb();
     schedule_publish();
   }
   return result.message.empty() ? std::string{} : result.message + "\n";
@@ -112,6 +116,7 @@ void ControlPlane::start() {
   if (!options_.config_file.empty()) {
     load_startup_config(options_.config_file);
   }
+  reconcile_fdb();
   ::mkdir(options_.run_dir.c_str(), 0755);
   memory_ = shm::create_region_memory("softswitch-" + options_.name);
   region_ = &shm::construct_region(memory_);
@@ -123,6 +128,7 @@ void ControlPlane::start() {
   listener_ = sys::unix_listen(dataplane_socket_path(), SOCK_SEQPACKET);
   loop_->add(listener_.get(), EPOLLIN, [this](std::uint32_t) { accept_dataplane(); });
   loop_->add(notify_fd_.get(), EPOLLIN, [this](std::uint32_t) { on_notify(); });
+  loop_->every(std::chrono::seconds{1}, [this] { age_fdb(); });
   // Retry publishes that timed out waiting for a grace period.
   loop_->every(std::chrono::milliseconds{20}, [this] {
     if (publish_pending_) {
@@ -182,15 +188,93 @@ void ControlPlane::detach_dataplane(const char* why) {
 
 void ControlPlane::on_notify() {
   (void)sys::eventfd_drain(notify_fd_.get());
+  const auto now = l2::Fdb::Clock::now();
+  bool changed = false;
   shm::LearnEvent ev;
   while (region_->learn.try_pop(ev)) {
-    // M2: feed the FDB.
+    ++learn_events_;
+    // The data plane only reports frames it accepted, but re-check against the config: the
+    // event may predate a reconfiguration.
+    if (!port_in_vlan(config_, ev.port, ev.vlan)) {
+      continue;
+    }
+    const auto result = fdb_.learn(ev.mac, ev.vlan, ev.port, now);
+    if (result == l2::LearnResult::kNew || result == l2::LearnResult::kMoved) {
+      changed = true;
+      if (result == l2::LearnResult::kMoved) {
+        log::debug("MAC move: ", ev.mac.to_string(), " vlan ", ev.vlan, " -> ",
+                   config_.ports[ev.port].name);
+      }
+    }
   }
   while (const shm::PacketMessage* msg = region_->punt.front()) {
     // M3+: BPDUs, IGMP, ARP, ICMP.
     (void)msg;
     region_->punt.pop();
   }
+  if (changed) {
+    schedule_publish();
+  }
+}
+
+void ControlPlane::reconcile_fdb() {
+  fdb_.clear_static();
+  for (const auto& m : config_.static_macs) {
+    if (const auto port = config_.port_index(m.port)) {
+      (void)fdb_.add_static(m.mac, m.vlan, *port);
+    }
+  }
+  const auto removed = fdb_.remove_if_not([this](const l2::FdbEntry& e) {
+    return port_in_vlan(config_, e.port, e.vlan) && runtime_[e.port].oper_up;
+  });
+  if (removed != 0) {
+    log::info("flushed ", removed, " MAC entries invalidated by configuration");
+  }
+}
+
+void ControlPlane::age_fdb() {
+  // Harvest and clear the hit bitmap atomically: a bit set after the exchange counts next time.
+  std::vector<std::uint64_t> hits(region_->dp.fdb_hits.size());
+  for (std::size_t i = 0; i < hits.size(); ++i) {
+    hits[i] = region_->dp.fdb_hits[i].exchange(0, std::memory_order_relaxed);
+  }
+  const auto now = l2::Fdb::Clock::now();
+  for (const auto& [key, entry] : fdb_.entries()) {
+    const std::uint64_t bit = shm::fdb_hash(entry.mac, entry.vlan) & (shm::kHitBits - 1);
+    if ((hits[bit / 64] & (std::uint64_t{1} << (bit % 64))) != 0) {
+      fdb_.touch(entry.mac, entry.vlan, now);
+    }
+  }
+  if (fdb_.age_out(now, std::chrono::seconds{config_.mac_aging_seconds}) != 0) {
+    schedule_publish();
+  }
+}
+
+std::string ControlPlane::clear(const std::vector<std::string>& t) {
+  // clear mac address-table [dynamic] [vlan ID] [interface PORT]
+  if (t.size() < 3 || t[1] != "mac" || t[2] != "address-table") {
+    return "% usage: clear mac address-table [dynamic] [vlan ID] [interface PORT]\n";
+  }
+  std::optional<PortId> port;
+  std::optional<VlanId> vlan;
+  for (std::size_t i = 3; i < t.size(); ++i) {
+    if (t[i] == "dynamic") {
+      continue;
+    }
+    if (t[i] == "vlan" && i + 1 < t.size()) {
+      vlan = static_cast<VlanId>(std::stoul(t[++i]));
+    } else if (t[i] == "interface" && i + 1 < t.size()) {
+      port = config_.port_index(t[++i]);
+      if (!port) {
+        return "% no such interface '" + t[i] + "'\n";
+      }
+    } else {
+      return "% unexpected '" + t[i] + "'\n";
+    }
+  }
+  const auto removed = fdb_.flush(port, vlan);
+  schedule_publish();
+  return "cleared " + std::to_string(removed) + " entries\n";
 }
 
 void ControlPlane::schedule_publish() {
@@ -229,6 +313,12 @@ void ControlPlane::build_tables(shm::Tables& t) const {
     e.stp_state = shm::StpState::kForwarding;  // M3: driven by RSTP
   }
   shm::clear_dynamic(t);
+  for (const auto& [key, e] : fdb_.entries()) {
+    if (!shm::fdb_insert(t, e.mac, e.vlan, e.port, e.is_static)) {
+      log::warn("data-plane FDB full; ", e.mac.to_string(), " not published");
+      break;
+    }
+  }
 }
 
 }  // namespace softswitch::cp
