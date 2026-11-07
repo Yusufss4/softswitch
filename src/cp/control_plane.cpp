@@ -136,6 +136,7 @@ void ControlPlane::start() {
       publish_now();
     }
   });
+  links_ = std::make_unique<LinkMonitor>(*loop_, [this](const LinkEvent& ev) { on_link(ev); });
   cli_ = std::make_unique<CliServer>(*loop_, cli_socket_path(),
                                      [this](const std::string& line) { return execute(line); });
   log::info("switch ", options_.name, " bridge MAC ", bridge_mac_.to_string(), ", ",
@@ -215,6 +216,36 @@ void ControlPlane::on_notify() {
   }
   if (changed) {
     schedule_publish();
+  }
+}
+
+void ControlPlane::on_link(const LinkEvent& ev) {
+  for (std::size_t i = 0; i < runtime_.size(); ++i) {
+    PortRuntime& rt = runtime_[i];
+    if (rt.ifindex != ev.ifindex) {
+      continue;
+    }
+    rt.mac = ev.mac;
+    const bool up = ev.oper_up();
+    if (up == rt.oper_up) {
+      return;
+    }
+    rt.oper_up = up;
+    ++rt.link_changes;
+    const auto port = static_cast<PortId>(i);
+    log::info("link ", config_.ports[i].name, " is ", up ? "up" : "down",
+              ev.admin_up ? "" : " (admin down)",
+              ev.carrier || !ev.admin_up ? "" : " (no carrier)");
+    if (!up) {
+      // Stations behind a dead link are unreachable through it: forget them now rather than
+      // black-holing their traffic until they age out.
+      const auto flushed = fdb_.flush(port, std::nullopt);
+      if (flushed != 0) {
+        log::info("flushed ", flushed, " MAC entries learned on ", config_.ports[i].name);
+      }
+    }
+    schedule_publish();
+    return;
   }
 }
 

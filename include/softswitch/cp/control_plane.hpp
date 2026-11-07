@@ -11,6 +11,7 @@
 #include "softswitch/cp/cli_server.hpp"
 #include "softswitch/cp/config.hpp"
 #include "softswitch/cp/event_loop.hpp"
+#include "softswitch/cp/netlink.hpp"
 #include "softswitch/l2/fdb.hpp"
 #include "softswitch/shm/publisher.hpp"
 #include "softswitch/shm/region.hpp"
@@ -57,13 +58,16 @@ class ControlPlane {
  private:
   struct PortRuntime {
     int ifindex = 0;
-    bool oper_up = true;
+    bool oper_up = true;  ///< Until the first netlink dump says otherwise.
+    MacAddress mac;
+    std::uint64_t link_changes = 0;
   };
 
   void load_startup_config(const std::string& path);
   void accept_dataplane();
   void detach_dataplane(const char* why);
   void on_notify();
+  void on_link(const LinkEvent& event);
   void publish_now();
   void build_tables(shm::Tables& tables) const;
   /// Re-applies static MACs from the config and drops dynamic entries the config invalidated.
@@ -97,6 +101,7 @@ class ControlPlane {
   sys::UniqueFd listener_;
   sys::UniqueFd dp_conn_;
   std::unique_ptr<CliServer> cli_;
+  std::unique_ptr<LinkMonitor> links_;
   std::uint64_t publishes_ = 0;
   bool publish_scheduled_ = false;
   bool publish_pending_ = false;
