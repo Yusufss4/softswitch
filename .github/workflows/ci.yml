@@ -69,7 +69,7 @@ jobs:
           ctest --preset release
       - name: Package
         run: cd build/release && cpack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: softswitch-bookworm-arm64
           path: |
@@ -136,7 +136,7 @@ jobs:
       - name: Job summary
         if: always()
         run: cat reports/cppcheck/summary.md >> "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cppcheck-report
@@ -160,7 +160,7 @@ jobs:
       - name: Job summary
         if: always()
         run: cat reports/valgrind/summary.md >> "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: valgrind-report
@@ -194,7 +194,7 @@ jobs:
             echo '```'
             echo "</details>"
           } | tee coverage-comment.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: reports/coverage/
@@ -228,7 +228,7 @@ jobs:
                  -artifact_prefix=fuzz-artifacts/ -print_final_stats=1
             echo "::endgroup::"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: fuzz-crashes
@@ -274,7 +274,7 @@ jobs:
         with:
           path: ./benchmark-cache
           key: benchmark-${{ runner.arch }}-${{ github.run_id }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: bench.json
