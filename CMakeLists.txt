@@ -37,6 +37,7 @@ add_library(softswitch_proto
   src/dp/pipeline.cpp
   src/igmp/snooper.cpp
   src/l2/fdb.cpp
+  src/l3/router.cpp
   src/stp/rstp.cpp
   src/pkt/arp.cpp
   src/pkt/bpdu.cpp
