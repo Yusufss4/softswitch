@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- L3 interfaces: `interface vlanN ip address A.B.C.D/N` (SVIs), `ip arp timeout`, `show ip
+  interface`, `show arp`, `clear arp`. sw1 owns 10.0.10.1/24 and 10.0.20.1/24 in the test
+  topology and hosts route through them.
+- `l3::Router` (pure): answers ARP and pings for SVI addresses, keeps the neighbour cache (RFC 826
+  merge rules), builds ICMP time-exceeded, queues packets per unresolved next hop with ARP
+  retries, and computes the route table (connected + static).
+- Data plane: in SVI VLANs broadcast ARP is punted as a copy and flooded; frames to the router
+  MAC are punted (ARP, IPv4 to an SVI address) or dropped (no route yet). `fuzz_router` target.
+
 ## [0.5.0] - 2026-11-08
 
 ### Added
