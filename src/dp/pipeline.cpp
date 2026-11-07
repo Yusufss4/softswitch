@@ -4,6 +4,7 @@
 
 #include "softswitch/pkt/bpdu.hpp"
 #include "softswitch/pkt/bytes.hpp"
+#include "softswitch/pkt/igmp.hpp"
 #include "softswitch/pkt/ipv4.hpp"
 
 namespace softswitch::dp {
@@ -178,6 +179,13 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
 
   const PortMask forwarding = vlan.members & forwarding_ports(tables);
 
+  // ---- IGMP snooping: multicast only where somebody listens ---------------------------------
+  if ((vlan.flags & shm::vlan_flag::kIgmpSnooping) != 0 && c.eth.ethertype == pkt::kEtherTypeIpv4 &&
+      c.eth.dst.is_multicast() && !c.eth.dst.is_broadcast() &&
+      snoop_multicast(tables, in_port, c, vlan, forwarding, egress)) {
+    return;
+  }
+
   // ---- known unicast: one port ------------------------------------------------------------
   if (!c.eth.dst.is_multicast()) {
     if (const shm::FdbSlot* slot = shm::fdb_lookup(tables, c.eth.dst, c.vlan)) {
@@ -238,12 +246,16 @@ void Pipeline::learn_source(const Tables& tables, PortId in_port, const Classifi
   }
 }
 
-void Pipeline::punt(const Tables& tables, PortId in_port, const Classified& c,
-                    shm::PuntReason reason) noexcept {
+bool Pipeline::punt(const Tables& tables, PortId in_port, const Classified& c,
+                    shm::PuntReason reason, bool copy_only) noexcept {
   shm::PacketMessage* msg = region_->punt.reserve();
   if (msg == nullptr || c.untagged.size() > msg->data.size()) {
-    reject(tables, in_port, c, DropReason::kPuntRingFull);
-    return;
+    if (copy_only) {
+      shm::bump(region_->dp.drops[static_cast<std::size_t>(DropReason::kPuntRingFull)]);
+    } else {
+      reject(tables, in_port, c, DropReason::kPuntRingFull);
+    }
+    return false;
   }
   msg->port = in_port;
   msg->vlan = c.vlan;
@@ -255,7 +267,46 @@ void Pipeline::punt(const Tables& tables, PortId in_port, const Classified& c,
   region_->punt.commit();
   shm::bump(region_->dp.punts);
   notify_ = true;
-  trace(tables, in_port, c, Decision::kPunt, DropReason::kNone, 0, c.vlan);
+  if (!copy_only) {
+    trace(tables, in_port, c, Decision::kPunt, DropReason::kNone, 0, c.vlan);
+  }
+  return true;
+}
+
+bool Pipeline::snoop_multicast(const Tables& tables, PortId in_port, const Classified& c,
+                               const shm::VlanEntry& vlan, PortMask forwarding,
+                               Egress& egress) noexcept {
+  const auto l3 = c.untagged.subspan(c.eth.payload_offset);
+  const auto ip = pkt::parse_ipv4(l3);
+  if (!ip || !ip->dst.is_multicast()) {
+    return false;
+  }
+  const PortMask others = forwarding & ~port_bit(in_port);
+  if (ip->protocol == pkt::kIpProtoIgmp && ip->total_len > ip->header_len) {
+    // The control plane learns from a copy; the switch decides where the original goes.
+    (void)punt(tables, in_port, c, shm::PuntReason::kIgmp, /*copy_only=*/true);
+    const bool query = l3[ip->header_len] == pkt::kIgmpQuery;
+    // Queries reach every host; reports and leaves only the routers (report suppression).
+    const PortMask out = query ? others : (vlan.mrouters & others);
+    if (out != 0) {
+      emit_to(tables, out, c.vlan, c.untagged, egress);
+    }
+    trace(tables, in_port, c, query ? Decision::kFlood : Decision::kMulticast, DropReason::kNone,
+          out, c.vlan);
+    return true;
+  }
+  if (ip->dst.is_local_multicast()) {
+    return false;  // 224.0.0.0/24 (OSPF, mDNS, ...) is always flooded
+  }
+  const shm::MdbSlot* group = shm::mdb_lookup(tables, ip->dst, c.vlan);
+  const PortMask out = ((group != nullptr ? group->ports : PortMask{0}) | vlan.mrouters) & others;
+  if (out == 0) {
+    reject(tables, in_port, c, DropReason::kNoListeners);  // unregistered: never flooded
+    return true;
+  }
+  emit_to(tables, out, c.vlan, c.untagged, egress);
+  trace(tables, in_port, c, Decision::kMulticast, DropReason::kNone, out, c.vlan);
+  return true;
 }
 
 void Pipeline::reject(const Tables& tables, PortId in_port, const Classified& c,

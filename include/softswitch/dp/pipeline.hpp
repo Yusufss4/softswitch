@@ -57,8 +57,13 @@ class Pipeline {
   /// Reports a new or moved source MAC, or marks a known one as hit for aging.
   void learn_source(const shm::Tables& tables, PortId in_port, const Classified& c) noexcept;
   /// Copies the (untagged) frame to the punt ring for the control plane.
-  void punt(const shm::Tables& tables, PortId in_port, const Classified& c,
-            shm::PuntReason reason) noexcept;
+  /// Returns false if the punt ring was full. With @p copy_only the frame is also forwarded,
+  /// so no punt decision is traced.
+  bool punt(const shm::Tables& tables, PortId in_port, const Classified& c, shm::PuntReason reason,
+            bool copy_only = false) noexcept;
+  /// IGMP and IPv4 multicast in a snooping VLAN. Returns true if it handled the frame.
+  bool snoop_multicast(const shm::Tables& tables, PortId in_port, const Classified& c,
+                       const shm::VlanEntry& vlan, PortMask forwarding, Egress& egress) noexcept;
   /// drop() plus a trace record.
   void reject(const shm::Tables& tables, PortId in_port, const Classified& c,
               shm::DropReason reason) noexcept;
