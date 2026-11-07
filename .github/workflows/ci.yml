@@ -281,10 +281,34 @@ jobs:
           name: benchmark-results
           path: bench.json
 
+  integration:
+    name: integration (netns, 3 switches)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $DEPS g++ iproute2 iputils-ping procps
+      - name: Build
+        run: |
+          cmake --preset release -DSOFTSWITCH_BUILD_BENCHMARKS=OFF
+          cmake --build --preset release
+      - name: Integration tests
+        run: ctest --preset integration
+      - name: Collect switch logs
+        if: failure()
+        run: mkdir -p integration-logs && cp /tmp/softswitch/*.log integration-logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: integration-logs
+          path: integration-logs/
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [pre-commit, build-test, pi-compat, sanitizers, clang-tidy, cppcheck, valgrind, coverage, fuzz, benchmark]
+    needs: [pre-commit, build-test, pi-compat, sanitizers, clang-tidy, cppcheck, valgrind, coverage, fuzz, benchmark, integration]
     runs-on: ubuntu-24.04
     steps:
       - name: All required jobs passed
