@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
 ### Added
 - Packet library (`softswitch::pkt`): bounds-checked parsers and builders for Ethernet/802.1Q
   (tag insert/strip in place and on copy), ARP, IPv4 (RFC 1071 checksum, RFC 1624 incremental
@@ -49,5 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Yusufss4/softswitch/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Yusufss4/softswitch/releases/tag/v0.1.0
