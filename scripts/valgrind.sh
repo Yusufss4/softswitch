@@ -8,6 +8,10 @@ BUILD_DIR=${1:-build/dev}
 OUT=reports/valgrind
 rm -rf "$OUT" && mkdir -p "$OUT"
 
+# Valgrind serializes threads, so the lock-free stress tests (which spin waiting for the other
+# thread) take minutes and prove nothing about memory. ThreadSanitizer covers them in CI.
+GTEST_FILTER="-*Concurrent*:*TwoThreadStress*"
+
 mapfile -t bins < <(find "$BUILD_DIR/tests" -maxdepth 1 -type f -executable -name '*_tests' | sort)
 [[ ${#bins[@]} -gt 0 ]] || { echo "no test binaries in $BUILD_DIR/tests" >&2; exit 2; }
 
@@ -25,7 +29,7 @@ for bin in "${bins[@]}"; do
   valgrind --tool=memcheck --leak-check=full --show-leak-kinds=definite,indirect \
     --errors-for-leak-kinds=definite,indirect --track-origins=yes --error-exitcode=99 \
     --xml=yes --xml-file="$OUT/$name.xml" --log-file="$OUT/$name.log" \
-    "$bin" --gtest_brief=1 > "$OUT/$name.stdout" 2>&1
+    "$bin" --gtest_brief=1 --gtest_filter="$GTEST_FILTER" > "$OUT/$name.stdout" 2>&1
   rc=$?
   errors=$(grep -c '<error>' "$OUT/$name.xml" || true)
   lost=$(grep -oP 'definitely lost: \K[0-9,]+' "$OUT/$name.log" | tr -d , || echo 0)
