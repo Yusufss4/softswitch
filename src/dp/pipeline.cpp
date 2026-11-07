@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "softswitch/pkt/bpdu.hpp"
 #include "softswitch/pkt/bytes.hpp"
 #include "softswitch/pkt/ipv4.hpp"
 
@@ -114,6 +115,17 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
     }
   }
   c.eth = *eth;
+
+  // ---- spanning tree BPDUs go to the control plane, whatever the VLAN or STP state ----------
+  if (c.eth.dst == pkt::kStpGroupMac) {
+    if ((tables.flags & shm::global_flag::kStpEnabled) != 0) {
+      punt(tables, in_port, c, shm::PuntReason::kBpdu);
+    } else {
+      reject(tables, in_port, c, DropReason::kReservedMulticast);
+    }
+    return;
+  }
+
   // ---- 802.1Q ingress: pick the VLAN, then filter ---------------------------------------
   const auto& port = tables.ports[in_port];
   const VlanId tagged_vid = c.was_tagged ? pkt::tci_vid(tci) : VlanId{0};
@@ -214,6 +226,26 @@ void Pipeline::learn_source(const Tables& tables, PortId in_port, const Classifi
     shm::bump(region_->dp.learn_events);
     notify_ = true;
   }
+}
+
+void Pipeline::punt(const Tables& tables, PortId in_port, const Classified& c,
+                    shm::PuntReason reason) noexcept {
+  shm::PacketMessage* msg = region_->punt.reserve();
+  if (msg == nullptr || c.untagged.size() > msg->data.size()) {
+    reject(tables, in_port, c, DropReason::kPuntRingFull);
+    return;
+  }
+  msg->port = in_port;
+  msg->vlan = c.vlan;
+  msg->len = static_cast<std::uint16_t>(c.untagged.size());
+  msg->reason = reason;
+  msg->flags = 0;
+  msg->timestamp_ns = now_ns_;
+  std::memcpy(msg->data.data(), c.untagged.data(), c.untagged.size());
+  region_->punt.commit();
+  shm::bump(region_->dp.punts);
+  notify_ = true;
+  trace(tables, in_port, c, Decision::kPunt, DropReason::kNone, 0, c.vlan);
 }
 
 void Pipeline::reject(const Tables& tables, PortId in_port, const Classified& c,

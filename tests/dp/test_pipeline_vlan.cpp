@@ -128,6 +128,28 @@ TEST_F(PipelineVlanTest, UntaggedOnTrunkWithoutNativeIsDropped) {
   EXPECT_EQ(h.drops(DropReason::kUntaggedNotAllowed), 1U);
 }
 
+TEST_F(PipelineVlanTest, BpdusArePuntedRegardlessOfVlanAndStpState) {
+  h.tables.flags = shm::global_flag::kStpEnabled;
+  h.tables.ports[3].stp_state = shm::StpState::kDiscarding;
+  h.receive(3, untagged("01:80:c2:00:00:00"));  // p3: trunk without native VLAN, discarding
+  EXPECT_TRUE(h.egress.sent.empty());
+  shm::PacketMessage msg;
+  ASSERT_TRUE(h.region->punt.try_pop(msg));
+  EXPECT_EQ(msg.port, 3);
+  EXPECT_EQ(msg.reason, shm::PuntReason::kBpdu);
+  EXPECT_EQ(msg.len, 60);
+  EXPECT_TRUE(h.pipeline.take_notify());
+}
+
+TEST_F(PipelineVlanTest, FullPuntRingDropsBpdusWithoutBlocking) {
+  h.tables.flags = shm::global_flag::kStpEnabled;
+  while (h.region->punt.reserve() != nullptr) {
+    h.region->punt.commit();
+  }
+  h.receive(0, untagged("01:80:c2:00:00:00"));
+  EXPECT_EQ(h.drops(DropReason::kPuntRingFull), 1U);
+}
+
 TEST_F(PipelineVlanTest, ReservedMulticastIsNeverForwarded) {
   for (const char* dst : {"01:80:c2:00:00:00", "01:80:c2:00:00:02", "01:80:c2:00:00:0e"}) {
     h.receive(0, untagged(dst));
