@@ -5,6 +5,8 @@
 #  - pro-bounds-pointer-arithmetic / pro-type-reinterpret-cast / pro-bounds-constant-array-index:
 #    packet parsing works on raw buffers by design; parsers are bounds-checked and fuzzed instead.
 #  - avoid-do-while: used in macros.
+#  - pro-type-vararg: POSIX syscalls such as fcntl/ioctl are C varargs and have no alternative.
+#  - pro-type-union-access: kernel ABI structs (epoll_event, tpacket headers) contain unions.
 Checks: >
   -*,
   bugprone-*,
@@ -18,6 +20,8 @@ Checks: >
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-bounds-constant-array-index,
   -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-pro-type-union-access,
   readability-container-size-empty,
   readability-make-member-function-const,
   readability-redundant-*,

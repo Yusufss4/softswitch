@@ -37,12 +37,24 @@ add_library(softswitch_proto
   src/pkt/icmp.cpp
   src/pkt/igmp.cpp
   src/pkt/ipv4.cpp
+  src/shm/publisher.cpp
+  src/shm/tables.cpp
 )
 add_library(softswitch::proto ALIAS softswitch_proto)
 target_include_directories(softswitch_proto PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(softswitch_proto PUBLIC softswitch::options)
+
+# softswitch::runtime: syscalls and processes (shared memory, sockets, packet I/O).
+add_library(softswitch_runtime
+  src/shm/region_mapping.cpp
+  src/sys/fd.cpp
+  src/sys/shared_memory.cpp
+  src/sys/unix_socket.cpp
+)
+add_library(softswitch::runtime ALIAS softswitch_runtime)
+target_link_libraries(softswitch_runtime PUBLIC softswitch::proto)
 
 # ---- executables ------------------------------------------------------------
 add_executable(softswitch src/main.cpp)

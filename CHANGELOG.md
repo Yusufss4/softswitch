@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TTL update), ICMP echo/error, IGMP v1/v2/v3 and spanning-tree BPDUs (config, TCN, RST).
 - Common vocabulary types: `MacAddress`, `Ipv4Address`, `Ipv4Prefix`, port masks.
 - `fuzz_packet` libFuzzer target, packet micro-benchmarks, `scripts/check.sh` (local CI gates).
+- Shared-memory IPC (`softswitch::shm`): fixed-capacity forwarding tables (FDB, MDB, neighbors,
+  routes, VLANs, ports), lock-free SPSC rings for learn/punt/inject/trace messages, and
+  double-buffered table publication with a quiescent-state grace period, so the data plane never
+  waits for the control plane.
+- System wrappers (`softswitch::sys`): RAII descriptors, eventfd, sealed memfd shared memory,
+  Unix sockets with SCM_RIGHTS descriptor passing.
 
 ### Changed
 - Release dry runs (`workflow_dispatch`) now run the publish job too (download, SBOM, checksums, notes) and upload the bundle as an artifact instead of creating a release.
