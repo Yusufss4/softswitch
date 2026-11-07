@@ -61,6 +61,10 @@ class Pipeline {
   /// so no punt decision is traced.
   bool punt(const shm::Tables& tables, PortId in_port, const Classified& c, shm::PuntReason reason,
             bool copy_only = false) noexcept;
+  /// A frame addressed to the router MAC in a VLAN with an SVI.
+  void handle_router_frame(const shm::Tables& tables, PortId in_port, const Classified& c,
+                           Egress& egress) noexcept;
+  [[nodiscard]] static bool is_own_address(const shm::Tables& tables, Ipv4Address ip) noexcept;
   /// IGMP and IPv4 multicast in a snooping VLAN. Returns true if it handled the frame.
   bool snoop_multicast(const shm::Tables& tables, PortId in_port, const Classified& c,
                        const shm::VlanEntry& vlan, PortMask forwarding, Egress& egress) noexcept;
