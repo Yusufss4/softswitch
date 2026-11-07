@@ -35,6 +35,7 @@ add_library(softswitch_proto
   src/cp/netlink_parse.cpp
   src/cp/text_table.cpp
   src/dp/pipeline.cpp
+  src/igmp/snooper.cpp
   src/l2/fdb.cpp
   src/stp/rstp.cpp
   src/pkt/arp.cpp

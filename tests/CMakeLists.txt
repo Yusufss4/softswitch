@@ -7,8 +7,10 @@ add_executable(softswitch_tests
   cp/test_config.cpp
   cp/test_netlink.cpp
   dp/test_pipeline_flood.cpp
+  dp/test_pipeline_igmp.cpp
   dp/test_pipeline_learning.cpp
   dp/test_pipeline_vlan.cpp
+  igmp/test_snooper.cpp
   l2/test_fdb.cpp
   stp/test_rstp.cpp
   pkt/test_ethernet.cpp
