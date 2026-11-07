@@ -291,7 +291,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends $DEPS g++ iproute2 iputils-ping procps
+          sudo apt-get install -y --no-install-recommends $DEPS g++ iproute2 iputils-ping procps tcpdump
       - name: Build
         run: |
           cmake --preset release -DSOFTSWITCH_BUILD_BENCHMARKS=OFF

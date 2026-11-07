@@ -15,6 +15,8 @@
 #include <stdexcept>
 
 #include "softswitch/common/log.hpp"
+#include "softswitch/pkt/bpdu.hpp"
+#include "softswitch/pkt/ethernet.hpp"
 #include "softswitch/shm/handshake.hpp"
 #include "softswitch/shm/region_mapping.hpp"
 #include "softswitch/sys/unix_socket.hpp"
@@ -108,6 +110,18 @@ std::string ControlPlane::execute(const std::string& line) {
   if (result.changed) {
     log::info("config: ", line);
     reconcile_fdb();
+    const bool timers_changed =
+        rstp_ && (rstp_->config().hello_time.count() != config_.stp_hello ||
+                  rstp_->config().max_age.count() != config_.stp_max_age ||
+                  rstp_->config().forward_delay.count() != config_.stp_forward_delay);
+    // Publish first: RSTP may answer by sending BPDUs on a port that only now came up, and the
+    // data plane only transmits on ports it already sees as up.
+    publish_now();
+    if (config_.stp_enabled != static_cast<bool>(rstp_) || timers_changed) {
+      restart_stp();
+    } else {
+      sync_stp();
+    }
     schedule_publish();
   }
   return result.message.empty() ? std::string{} : result.message + "\n";
@@ -137,6 +151,12 @@ void ControlPlane::start() {
     }
   });
   links_ = std::make_unique<LinkMonitor>(*loop_, [this](const LinkEvent& ev) { on_link(ev); });
+  restart_stp();
+  loop_->every(std::chrono::milliseconds{100}, [this] {
+    if (rstp_) {
+      rstp_->tick(stp::Clock::now());
+    }
+  });
   cli_ = std::make_unique<CliServer>(*loop_, cli_socket_path(),
                                      [this](const std::string& line) { return execute(line); });
   log::info("switch ", options_.name, " bridge MAC ", bridge_mac_.to_string(), ", ",
@@ -210,8 +230,12 @@ void ControlPlane::on_notify() {
     }
   }
   while (const shm::PacketMessage* msg = region_->punt.front()) {
-    // M3+: BPDUs, IGMP, ARP, ICMP.
-    (void)msg;
+    const auto frame = std::span<const std::uint8_t>(msg->data.data(), msg->len);
+    if (msg->reason == shm::PuntReason::kBpdu && rstp_ && msg->port < runtime_.size()) {
+      if (const auto bpdu = pkt::parse_bpdu_frame(frame)) {
+        rstp_->receive(msg->port, *bpdu, stp::Clock::now());
+      }
+    }
     region_->punt.pop();
   }
   if (changed) {
@@ -244,9 +268,93 @@ void ControlPlane::on_link(const LinkEvent& ev) {
         log::info("flushed ", flushed, " MAC entries learned on ", config_.ports[i].name);
       }
     }
+    publish_now();  // see execute(): the data plane must see the port up before BPDUs go out
+    sync_stp();
     schedule_publish();
     return;
   }
+}
+
+void ControlPlane::restart_stp() {
+  stp_state_.assign(runtime_.size(), shm::StpState::kForwarding);
+  rstp_.reset();
+  if (!config_.stp_enabled) {
+    log::info("spanning tree disabled: every port forwards");
+    schedule_publish();
+    return;
+  }
+  stp_state_.assign(runtime_.size(), shm::StpState::kDiscarding);
+  stp::BridgeConfig bridge;
+  bridge.priority = config_.stp_priority;
+  bridge.mac = bridge_mac_;
+  bridge.hello_time = std::chrono::seconds{config_.stp_hello};
+  bridge.max_age = std::chrono::seconds{config_.stp_max_age};
+  bridge.forward_delay = std::chrono::seconds{config_.stp_forward_delay};
+  stp::Rstp::Callbacks cb;
+  cb.send_bpdu = [this](PortId port, const pkt::Bpdu& bpdu) {
+    std::array<std::uint8_t, pkt::kMinFrameLen> frame{};
+    const MacAddress& src = runtime_[port].mac.is_zero() ? bridge_mac_ : runtime_[port].mac;
+    const auto len = pkt::build_bpdu_frame(frame, src, bpdu);
+    inject_raw(port, std::span{frame}.first(len));
+  };
+  cb.state_changed = [this](PortId port, stp::State state) {
+    stp_state_[port] = state == stp::State::kForwarding ? shm::StpState::kForwarding
+                       : state == stp::State::kLearning ? shm::StpState::kLearning
+                                                        : shm::StpState::kDiscarding;
+    log::debug("stp: ", config_.ports[port].name, " -> ", stp::to_string(state));
+    schedule_publish();
+  };
+  cb.flush = [this](PortId except) {
+    std::size_t removed = 0;
+    for (std::size_t q = 0; q < runtime_.size(); ++q) {
+      if (static_cast<PortId>(q) != except) {
+        removed += fdb_.flush(static_cast<PortId>(q), std::nullopt);
+      }
+    }
+    if (removed != 0) {
+      log::debug("stp: topology change flushed ", removed, " MAC entries");
+      schedule_publish();
+    }
+  };
+  rstp_ = std::make_unique<stp::Rstp>(bridge, runtime_.size(), cb);
+  log::info("spanning tree enabled: bridge priority ", config_.stp_priority);
+  sync_stp();
+}
+
+void ControlPlane::sync_stp() {
+  if (!rstp_) {
+    return;
+  }
+  const auto now = stp::Clock::now();
+  if (rstp_->config().priority != config_.stp_priority) {
+    rstp_->set_bridge_priority(config_.stp_priority, now);
+  }
+  for (std::size_t i = 0; i < runtime_.size(); ++i) {
+    const auto port = static_cast<PortId>(i);
+    const PortConfig& pc = config_.ports[i];
+    const stp::PortConfig& cur = rstp_->port_config(port);
+    if (cur.path_cost != pc.stp_cost || cur.priority != pc.stp_priority ||
+        cur.edge != pc.stp_edge) {
+      rstp_->set_port_config(port, stp::PortConfig{pc.stp_cost, pc.stp_priority, pc.stp_edge}, now);
+    }
+    rstp_->set_port_enabled(port, !pc.shutdown && runtime_[i].oper_up, now);
+  }
+}
+
+void ControlPlane::inject_raw(PortId port, std::span<const std::uint8_t> frame) {
+  shm::PacketMessage* msg = region_->inject.reserve();
+  if (msg == nullptr || frame.size() > msg->data.size()) {
+    ++inject_drops_;
+    return;
+  }
+  msg->port = port;
+  msg->vlan = 0;
+  msg->len = static_cast<std::uint16_t>(frame.size());
+  msg->reason = shm::PuntReason::kNone;
+  msg->flags = shm::inject_flag::kRaw;
+  std::copy(frame.begin(), frame.end(), msg->data.begin());
+  region_->inject.commit();
+  (void)sys::eventfd_signal(kick_fd_.get());
 }
 
 void ControlPlane::reconcile_fdb() {
@@ -348,14 +456,14 @@ void ControlPlane::publish_now() {
 
 void ControlPlane::build_tables(shm::Tables& t) const {
   t.router_mac = bridge_mac_;
-  t.flags = 0;
+  t.flags = rstp_ ? shm::global_flag::kStpEnabled : std::uint8_t{0};
   apply_l2_config(config_, t);
   for (std::size_t i = 0; i < runtime_.size() && i < kMaxPorts; ++i) {
     shm::PortEntry& e = t.ports[i];
     e.ifindex = runtime_[i].ifindex;
     e.flags = static_cast<std::uint8_t>(runtime_[i].oper_up ? (e.flags | shm::port_flag::kOperUp)
                                                             : (e.flags & ~shm::port_flag::kOperUp));
-    e.stp_state = shm::StpState::kForwarding;  // M3: driven by RSTP
+    e.stp_state = i < stp_state_.size() ? stp_state_[i] : shm::StpState::kForwarding;
   }
   shm::clear_dynamic(t);
   for (const auto& [key, e] : fdb_.entries()) {

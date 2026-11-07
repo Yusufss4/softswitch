@@ -30,7 +30,7 @@ expect_ping h1 h3
 cli sw1 interface s1p3 shutdown >/dev/null
 expect_no_ping h1 h3
 cli sw1 interface s1p3 no shutdown >/dev/null
-expect_ping h1 h3
+wait_for_ping h1 h3 5  # the trunk re-joins the spanning tree first (proposal/agreement)
 
 # running-config replays: feed it back through the CLI and nothing changes.
 before=$(cli sw3 show running-config)

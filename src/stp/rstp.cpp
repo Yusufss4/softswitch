@@ -128,6 +128,11 @@ void Rstp::receive(PortId p, const pkt::Bpdu& bpdu, Clock::time_point now) {
     }
     const auto old_root_port = root_port_;
     reselect(now);
+    if (port.status.role == Role::kDesignated && port.status.proposing) {
+      // The neighbour just told us it is (wrongly) designated -- typically it has only now come
+      // up. Re-propose right away instead of waiting up to a hello for the next attempt.
+      port.send_pending = true;
+    }
     if (bpdu.has(pkt::bpdu_flag::kProposal)) {
       if (port.status.role == Role::kRoot) {
         // Sync: block our designated ports (they re-propose), then agree upstream.
@@ -198,8 +203,10 @@ void Rstp::tick(Clock::time_point now) {
         set_state(p, State::kForwarding, now);
       }
     }
-    // Designated ports send BPDUs every hello time.
-    if (port.status.role == Role::kDesignated && now >= port.next_hello) {
+    // Designated ports send BPDUs every hello time, and repeat outstanding proposals sooner.
+    if (port.status.role == Role::kDesignated &&
+        (now >= port.next_hello ||
+         (port.status.proposing && now >= port.last_tx + kProposalRetry))) {
       port.send_pending = true;
     }
   }
@@ -397,6 +404,7 @@ void Rstp::transmit(PortId p, Clock::time_point now) {
   port.send_pending = false;
   port.send_agreement = false;
   port.next_hello = now + config_.hello_time;
+  port.last_tx = now;
 }
 
 void Rstp::transmit_pending(Clock::time_point now) {

@@ -236,6 +236,33 @@ TEST_F(TriangleTest, PriorityChangeMovesTheRoot) {
   EXPECT_EQ(net_[b_].status(0).role, Role::kAlternate);
 }
 
+TEST(Rstp, LateNeighbourIsAgreedWithoutWaitingForAHello) {
+  SimNet net;
+  const auto a = net.add_bridge(4096, 0x02000000000A, 1);
+  const auto b = net.add_bridge(32768, 0x02000000000B, 1);
+  net[a].set_port_enabled(0, true, net.now());  // A comes up first and proposes into the void
+  net.run_for(500ms);
+  (void)net.connect(a, 0, b, 0);  // B appears mid-hello
+  // No time passes: B's first BPDU makes A re-propose, B agrees, A forwards.
+  EXPECT_EQ(net[a].status(0).state, State::kForwarding);
+  EXPECT_EQ(net[b].status(0).role, Role::kRoot);
+}
+
+TEST(Rstp, ProposalLostAtLinkUpIsRetriedWithinASecond) {
+  SimNet net;
+  const auto a = net.add_bridge(4096, 0x02000000000A, 1);
+  const auto b = net.add_bridge(32768, 0x02000000000B, 1);
+  const auto link = net.connect(a, 0, b, 0);  // connect() delivers nothing while lossy...
+  net.set_lossy(link, true);
+  net.set_link_up(link, false);
+  net.set_link_up(link, true);  // ...both ends come up and their first BPDUs are lost
+  net.run_for(100ms);
+  net.set_lossy(link, false);
+  net.run_for(700ms);  // < hello time: only the proposal retry can converge this
+  EXPECT_EQ(net[a].status(0).state, State::kForwarding);
+  EXPECT_EQ(net[b].status(0).role, Role::kRoot);
+}
+
 TEST(Rstp, EdgePortForwardsImmediatelyAndLosesEdgeOnBpdu) {
   SimNet net;
   const auto a = net.add_bridge(32768, 0x02000000000A, 2);

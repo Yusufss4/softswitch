@@ -64,6 +64,7 @@ const char* drop_reason_name(shm::DropReason r) {
 constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "show mac address-table [vlan ID] [interface PORT]\n"
+    "show spanning-tree\n"
     "clear mac address-table [dynamic] [vlan ID] [interface PORT]\n"
     "vlan ID [name NAME] | no vlan ID\n"
     "interface PORT description TEXT | shutdown | no shutdown\n"
@@ -74,6 +75,8 @@ constexpr const char* kHelp =
     "mac address-table aging-time SECONDS\n"
     "mac address-table static MAC vlan ID interface PORT | no mac address-table static MAC vlan "
     "ID\n"
+    "[no] spanning-tree | spanning-tree priority|hello-time|max-age|forward-time N\n"
+    "interface PORT spanning-tree portfast | cost N | port-priority N\n"
     "trace sample N\n"
     "hostname NAME\n";
 
@@ -101,6 +104,9 @@ std::string ControlPlane::show(const std::vector<std::string>& t) const {
   }
   if (what == "mac") {
     return show_mac(t);
+  }
+  if (what == "spanning-tree") {
+    return show_spanning_tree();
   }
   if (what == "help") {
     return kHelp;
@@ -204,6 +210,49 @@ std::string ControlPlane::show_mac(const std::vector<std::string>& t) const {
          std::to_string(fdb_.size()) + " entries; aging " +
          std::to_string(config_.mac_aging_seconds) + "s; moves " + std::to_string(fdb_.moves()) +
          "\n";
+}
+
+std::string ControlPlane::show_spanning_tree() const {
+  if (!rstp_) {
+    return "spanning tree is disabled (all ports forward)\n";
+  }
+  const auto bid = [](stp::BridgeId id) {
+    std::ostringstream o;
+    o << (id >> 48U) << "." << MacAddress::from_u64(id & 0xFFFFFFFFFFFFULL).to_string();
+    return o.str();
+  };
+  const stp::Rstp& r = *rstp_;
+  const std::optional<PortId> root_port = r.root_port();
+  std::ostringstream out;
+  out << "Bridge ID:   " << bid(r.bridge_id()) << "\n"
+      << "Root ID:     " << bid(r.root_id())
+      << (r.is_root_bridge() ? "  (this bridge is the root)" : "") << "\n"
+      << "Root cost:   " << r.root_cost() << "\n"
+      << "Root port:   " << (root_port ? config_.ports[*root_port].name : std::string("-")) << "\n"
+      << "Timers:      hello " << r.config().hello_time.count() << "s, max age "
+      << r.config().max_age.count() << "s, forward delay " << r.config().forward_delay.count()
+      << "s\n"
+      << "Topology changes: " << r.topology_changes();
+  if (const auto last = r.last_topology_change()) {
+    out << ", last "
+        << std::chrono::duration_cast<std::chrono::seconds>(stp::Clock::now() - *last).count()
+        << "s ago";
+  }
+  out << "\n\n";
+  TextTable table(
+      {"Port", "Role", "State", "Cost", "Prio.Nbr", "Edge", "Designated bridge", "BPDU tx/rx"});
+  for (std::size_t i = 0; i < config_.ports.size(); ++i) {
+    const auto& st = r.status(static_cast<PortId>(i));
+    const auto& pc = r.port_config(static_cast<PortId>(i));
+    std::ostringstream prio;
+    prio << unsigned{pc.priority} << "." << (st.port_id & 0x0FFFU);
+    table.add_row({config_.ports[i].name, st.enabled ? stp::to_string(st.role) : "disabled",
+                   st.enabled ? stp::to_string(st.state) : "-", std::to_string(pc.path_cost),
+                   prio.str(), st.oper_edge ? "yes" : "no",
+                   st.received ? bid(st.received->bridge) : std::string("-"),
+                   std::to_string(st.bpdus_sent) + "/" + std::to_string(st.bpdus_received)});
+  }
+  return out.str() + table.render();
 }
 
 std::string ControlPlane::show_dataplane() const {

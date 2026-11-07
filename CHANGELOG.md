@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   events set each port's operational state (admin up and carrier); a port going down flushes the
   MACs learned on it. Re-dumps after a netlink overrun. Bounds-checked parser with tests and a
   `fuzz_netlink` target.
+- RSTP runs in every switch: the data plane punts BPDUs (before VLAN and STP-state filtering);
+  `softswitchd` feeds them to `stp::Rstp`, injects its BPDUs raw on the egress port, publishes
+  port states, flushes the FDB on topology changes and drives port enablement from link state.
+- Spanning-tree configuration: `[no] spanning-tree`, `spanning-tree priority|hello-time|max-age|
+  forward-time`, `interface PORT spanning-tree portfast|cost|port-priority`; `show spanning-tree`.
+- The test configs make sw1 the root and host ports portfast; `test_stp.sh` runs the looped
+  triangle: one alternate port, no storm, and failover under traffic without lost pings.
+
+### Changed
+- Outstanding RSTP proposals are retried every 500 ms, and a proposing port re-proposes at once
+  when the neighbour shows up, so BPDUs lost while a link comes up cost < 1 s instead of a hello.
+- Config and link changes publish tables before RSTP reacts, so BPDUs on a port that just came
+  up are not dropped by the data plane.
 
 ## [0.3.0] - 2026-11-07
 

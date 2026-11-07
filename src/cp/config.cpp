@@ -158,6 +158,30 @@ CommandResult cmd_interface(SwitchConfig& c, const Tokens& t) {
   if (t[2] == "switchport") {
     return cmd_switchport(port, t, 3);
   }
+  if (t[2] == "spanning-tree" && t.size() == 4 && t[3] == "portfast") {
+    port.stp_edge = true;
+    return CommandResult::success();
+  }
+  if (t[2] == "no" && t.size() == 5 && t[3] == "spanning-tree" && t[4] == "portfast") {
+    port.stp_edge = false;
+    return CommandResult::success();
+  }
+  if (t[2] == "spanning-tree" && t.size() == 5 && t[3] == "cost") {
+    const auto cost = parse_uint(t[4], 200'000'000);
+    if (!cost || *cost == 0) {
+      return CommandResult::error("path cost must be 1..200000000");
+    }
+    port.stp_cost = *cost;
+    return CommandResult::success();
+  }
+  if (t[2] == "spanning-tree" && t.size() == 5 && t[3] == "port-priority") {
+    const auto prio = parse_uint(t[4], 240);
+    if (!prio || *prio % 16 != 0) {
+      return CommandResult::error("port priority must be 0..240 in steps of 16");
+    }
+    port.stp_priority = static_cast<std::uint8_t>(*prio);
+    return CommandResult::success();
+  }
   return CommandResult::error("unknown interface command '" + t[2] + "'");
 }
 
@@ -210,6 +234,36 @@ CommandResult cmd_mac(SwitchConfig& c, const Tokens& t, bool negate) {
   return CommandResult::error(
       "usage: mac address-table aging-time SECONDS | mac address-table static MAC vlan ID "
       "interface PORT");
+}
+
+CommandResult cmd_spanning_tree(SwitchConfig& c, const Tokens& t, bool negate) {
+  if (t.size() == 1) {
+    c.stp_enabled = !negate;
+    return CommandResult::success();
+  }
+  if (negate || t.size() != 3) {
+    return CommandResult::error(
+        "usage: [no] spanning-tree | spanning-tree priority|hello-time|max-age|forward-time N");
+  }
+  const auto value = parse_uint(t[2], 65535);
+  if (!value) {
+    return CommandResult::error("invalid number '" + t[2] + "'");
+  }
+  if (t[1] == "priority") {
+    if (*value > 61440 || *value % 4096 != 0) {
+      return CommandResult::error("bridge priority must be 0..61440 in steps of 4096");
+    }
+    c.stp_priority = static_cast<std::uint16_t>(*value);
+  } else if (t[1] == "hello-time" && *value >= 1 && *value <= 10) {
+    c.stp_hello = *value;
+  } else if (t[1] == "max-age" && *value >= 6 && *value <= 40) {
+    c.stp_max_age = *value;
+  } else if (t[1] == "forward-time" && *value >= 4 && *value <= 30) {
+    c.stp_forward_delay = *value;
+  } else {
+    return CommandResult::error("out of range (hello-time 1-10, max-age 6-40, forward-time 4-30)");
+  }
+  return CommandResult::success();
 }
 
 }  // namespace
@@ -315,7 +369,8 @@ bool is_config_command(const std::vector<std::string>& t) noexcept {
     return false;
   }
   const std::string& w = t[0] == "no" && t.size() > 1 ? t[1] : t[0];
-  return w == "hostname" || w == "vlan" || w == "interface" || w == "trace" || w == "mac";
+  return w == "hostname" || w == "vlan" || w == "interface" || w == "trace" || w == "mac" ||
+         w == "spanning-tree";
 }
 
 CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
@@ -340,6 +395,12 @@ CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
   }
   if (t[0] == "trace") {
     return cmd_trace(c, t);
+  }
+  if (t[0] == "spanning-tree") {
+    return cmd_spanning_tree(c, t, false);
+  }
+  if (t[0] == "no" && t.size() > 1 && t[1] == "spanning-tree") {
+    return cmd_spanning_tree(c, Tokens(t.begin() + 1, t.end()), true);
   }
   if (t[0] == "mac") {
     return cmd_mac(c, t, false);
@@ -369,6 +430,22 @@ std::string render_running_config(const SwitchConfig& c) {
   if (c.mac_aging_seconds != kDefaultMacAgingSeconds) {
     out << "mac address-table aging-time " << c.mac_aging_seconds << "\n";
   }
+  const SwitchConfig defaults_cfg;
+  if (!c.stp_enabled) {
+    out << "no spanning-tree\n";
+  }
+  if (c.stp_priority != defaults_cfg.stp_priority) {
+    out << "spanning-tree priority " << c.stp_priority << "\n";
+  }
+  if (c.stp_hello != defaults_cfg.stp_hello) {
+    out << "spanning-tree hello-time " << c.stp_hello << "\n";
+  }
+  if (c.stp_max_age != defaults_cfg.stp_max_age) {
+    out << "spanning-tree max-age " << c.stp_max_age << "\n";
+  }
+  if (c.stp_forward_delay != defaults_cfg.stp_forward_delay) {
+    out << "spanning-tree forward-time " << c.stp_forward_delay << "\n";
+  }
   for (const auto& m : c.static_macs) {
     out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "
         << m.port << "\n";
@@ -394,6 +471,15 @@ std::string render_running_config(const SwitchConfig& c) {
     if (p.trunk_allowed != defaults.trunk_allowed) {
       out << prefix << "switchport trunk allowed vlan " << format_vlan_list(p.trunk_allowed)
           << "\n";
+    }
+    if (p.stp_edge) {
+      out << prefix << "spanning-tree portfast\n";
+    }
+    if (p.stp_cost != defaults.stp_cost) {
+      out << prefix << "spanning-tree cost " << p.stp_cost << "\n";
+    }
+    if (p.stp_priority != defaults.stp_priority) {
+      out << prefix << "spanning-tree port-priority " << unsigned{p.stp_priority} << "\n";
     }
     if (p.shutdown) {
       out << prefix << "shutdown\n";

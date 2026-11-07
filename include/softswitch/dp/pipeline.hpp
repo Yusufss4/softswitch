@@ -56,6 +56,9 @@ class Pipeline {
   void drop(PortId in_port, shm::DropReason reason) noexcept;
   /// Reports a new or moved source MAC, or marks a known one as hit for aging.
   void learn_source(const shm::Tables& tables, PortId in_port, const Classified& c) noexcept;
+  /// Copies the (untagged) frame to the punt ring for the control plane.
+  void punt(const shm::Tables& tables, PortId in_port, const Classified& c,
+            shm::PuntReason reason) noexcept;
   /// drop() plus a trace record.
   void reject(const shm::Tables& tables, PortId in_port, const Classified& c,
               shm::DropReason reason) noexcept;

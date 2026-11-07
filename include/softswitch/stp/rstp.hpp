@@ -78,6 +78,10 @@ struct PortStatus {
 
 class Rstp {
  public:
+  /// While a proposal is outstanding it is repeated this often (instead of once per hello), so a
+  /// BPDU lost at link-up -- common while a link is still coming up -- costs < 1 s, not 2 s.
+  static constexpr std::chrono::milliseconds kProposalRetry{500};
+
   struct Callbacks {
     /// Transmit @p bpdu on @p port.
     std::function<void(PortId, const pkt::Bpdu&)> send_bpdu;
@@ -123,6 +127,7 @@ class Rstp {
     Clock::time_point fd_while;  ///< Next forward-delay transition while proposing.
     Clock::time_point tc_while;  ///< Send TC flags until then.
     Clock::time_point next_hello;
+    Clock::time_point last_tx;
     bool send_pending = false;
     bool send_agreement = false;
   };
