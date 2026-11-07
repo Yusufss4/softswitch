@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `softswitchd --config FILE` loads a startup config.
 - Startup configs for the test topology (`configs/sw{1,2,3}.conf`): VLAN 10/20 with 802.1Q trunks.
 - `fuzz_config` fuzz target with a seed corpus under `fuzz/corpus/config`.
+- 802.1Q VLAN enforcement in the data plane: tagged frames dropped on access ports
+  (priority-tagged accepted), untagged frames classified to the PVID or dropped when the port has
+  none, ingress filtering on VLAN membership, egress only to members with per-port tagging, and
+  IEEE reserved group addresses (01:80:C2:00:00:0x) never forwarded. Drops are counted per reason.
+- `fuzz_pipeline` fuzz target asserting the VLAN forwarding invariants on arbitrary frames.
 
 ## [0.2.0] - 2026-11-07
 

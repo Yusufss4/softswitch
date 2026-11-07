@@ -11,7 +11,8 @@ step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
 step "format (pre-commit)"
 git add -N . >/dev/null 2>&1 || true   # make new files visible to pre-commit
-pre-commit run --all-files
+# The first run may fix formatting in place; it only fails if a second run still changes files.
+pre-commit run --all-files >/dev/null 2>&1 || pre-commit run --all-files
 
 step "build + unit tests (dev)"
 cmake --preset dev >/dev/null
