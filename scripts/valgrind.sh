@@ -3,7 +3,7 @@
 # summary to reports/valgrind/. Exits non-zero on any memory error or definite/indirect leak.
 # Usage: scripts/valgrind.sh [BUILD_DIR]
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 BUILD_DIR=${1:-build/dev}
 OUT=reports/valgrind
 rm -rf "$OUT" && mkdir -p "$OUT"

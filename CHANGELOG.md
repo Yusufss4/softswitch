@@ -24,7 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   port (TPACKET_V2 RX/TX rings, promiscuous, qdisc bypass) and forwards on a pinned SCHED_FIFO
   thread with `mlockall`. Flood-only forwarding for now.
 
+- netns integration tests: `scripts/topo.sh` (3 switches, 5 hosts), `scripts/switches.sh`,
+  `tests/integration/` registered in ctest (`ctest --preset integration`) and run in CI.
+- shellcheck in pre-commit.
+
 ### Removed
+- `scripts/setup_netns.sh` / `teardown_netns.sh` (superseded by `topo.sh`).
 - The placeholder `softswitch` executable (replaced by `softswitchd` and `ss-dataplane`).
 
 ### Changed

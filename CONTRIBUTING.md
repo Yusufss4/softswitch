@@ -21,12 +21,29 @@
 
     cmake --preset dev && cmake --build --preset dev && ctest --preset dev
 
+## Integration tests (netns)
+
+`scripts/topo.sh` builds a veth/netns topology of three switches and five hosts
+(see the diagram in `scripts/topology.sh`); `scripts/switches.sh` starts a `softswitchd` +
+`ss-dataplane` pair per switch. The integration tests in `tests/integration/` drive both and
+need passwordless `sudo`:
+
+    cmake --preset release && cmake --build --preset release
+    ctest --preset integration
+
+Run a topology by hand:
+
+    scripts/topo.sh up && scripts/switches.sh start
+    sudo ip netns exec h1 ping 10.0.10.13
+    scripts/switches.sh stop && scripts/topo.sh down
+
 ## Static and dynamic analysis
 
     CLANG_TIDY=clang-tidy-18 scripts/clang-tidy.sh build/dev   # same version as CI (apt.llvm.org on bookworm)
     scripts/cppcheck.sh build/dev      # report in reports/cppcheck/
     scripts/valgrind.sh build/dev      # memcheck on all unit tests, reports in reports/valgrind/
     scripts/coverage.sh                # report in reports/coverage/
+    scripts/check.sh                   # all of the above (local CI)
 
 ## Pull requests
 1. Open or pick an issue. Branch from `main` as `type/area-topic`.
