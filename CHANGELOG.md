@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   waits for the control plane.
 - System wrappers (`softswitch::sys`): RAII descriptors, eventfd, sealed memfd shared memory,
   Unix sockets with SCM_RIGHTS descriptor passing.
+- `softswitchd` (control plane): epoll event loop with timerfd/signalfd, creates the shared
+  region, publishes tables and hands the region to the data plane over a SEQPACKET socket.
+- `ss-dataplane` (data plane): attaches over the handshake, opens one AF_PACKET port per switch
+  port (TPACKET_V2 RX/TX rings, promiscuous, qdisc bypass) and forwards on a pinned SCHED_FIFO
+  thread with `mlockall`. Flood-only forwarding for now.
+
+### Removed
+- The placeholder `softswitch` executable (replaced by `softswitchd` and `ss-dataplane`).
 
 ### Changed
 - Release dry runs (`workflow_dispatch`) now run the publish job too (download, SBOM, checksums, notes) and upload the bundle as an artifact instead of creating a release.
