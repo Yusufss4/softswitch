@@ -226,7 +226,9 @@ jobs:
           for f in build/fuzz/fuzz/fuzz_*; do
             [[ -x "$f" && ! -d "$f" ]] || continue
             echo "::group::$(basename "$f")"
-            "$f" -max_total_time=60 -timeout=10 -rss_limit_mb=2048 \
+            name=$(basename "$f"); corpus="fuzz/corpus/${name#fuzz_}"
+            seeds=(); [[ -d "$corpus" ]] && seeds=("$corpus")
+            "$f" "${seeds[@]}" -max_total_time=60 -timeout=10 -rss_limit_mb=2048 \
                  -artifact_prefix=fuzz-artifacts/ -print_final_stats=1
             echo "::endgroup::"
           done

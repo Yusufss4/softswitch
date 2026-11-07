@@ -43,7 +43,14 @@ if [[ $QUICK -eq 0 ]]; then
     cmake --build --preset fuzz
     for f in build/fuzz/fuzz/fuzz_*; do
       [[ -x "$f" && ! -d "$f" ]] || continue
-      "$f" -max_total_time=20 -print_final_stats=0 2>&1 | tail -1
+      name=$(basename "$f")
+      seeds=()
+      [[ -d "fuzz/corpus/${name#fuzz_}" ]] && seeds=("fuzz/corpus/${name#fuzz_}")
+      # Copy seeds so libFuzzer's new findings don't land in the repository.
+      work=$(mktemp -d)
+      [[ ${#seeds[@]} -gt 0 ]] && cp "${seeds[0]}"/* "$work"/
+      "$f" "$work" -max_total_time=20 -print_final_stats=0 2>&1 | tail -1
+      rm -rf "$work"
     done
   fi
 fi

@@ -1,0 +1,8 @@
+! sw2¬¬¬¬: access switch with host h3 (V
+hÿÿÿÿÿÿÿostname sw2
+vlan 10 nan 10,20
+interface s2pe users
+vlan 20 name servers
+interface s2p1 description hos} h3
+interface s2p1 switchport access vlan 10
+iinterf a.lowdav enl 10,20

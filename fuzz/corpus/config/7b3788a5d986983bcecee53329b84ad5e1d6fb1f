@@ -1,0 +1,6 @@
+
+vlan 10
+vlan 20 name serve
+vlan 21 name s 2
+vlan 11 name use
+vlan 2

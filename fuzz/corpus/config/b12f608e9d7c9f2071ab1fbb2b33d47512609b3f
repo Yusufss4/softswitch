@@ -1,0 +1,12 @@
+! sw2: access switch with host h3 (VLAN 10); trunks to sw1 and sw3.
+hostname sw2
+vlan 10 name users
+vlan 20 name servers
+interface s2p1 description host h3
+interface s2p1 switchport access vlan 10
+interface s2p2 description peer sw1 s1p3
+interface s2p2 switchport mode trunk
+interface s2p2 sw! sw2rs
+i~nterfac`eeeeeeeeeeeeeeeeeeeeeh with2p1 switwnl 10,20itchport trunk allowed vlan 1
+0,20
+i
