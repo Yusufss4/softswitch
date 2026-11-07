@@ -10,6 +10,7 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <stdexcept>
 
 #include "softswitch/common/log.hpp"
@@ -30,7 +31,10 @@ MacAddress derive_bridge_mac(const std::string& name) noexcept {
 }
 
 ControlPlane::ControlPlane(EventLoop& loop, ControlPlaneOptions options)
-    : loop_(&loop), options_(std::move(options)), bridge_mac_(derive_bridge_mac(options_.name)) {
+    : loop_(&loop),
+      options_(std::move(options)),
+      bridge_mac_(derive_bridge_mac(options_.name)),
+      config_(SwitchConfig::with_ports(options_.name, options_.ports)) {
   if (options_.ports.empty() || options_.ports.size() > kMaxPorts) {
     throw std::invalid_argument("need between 1 and 32 ports");
   }
@@ -38,13 +42,12 @@ ControlPlane::ControlPlane(EventLoop& loop, ControlPlaneOptions options)
     if (name.size() >= shm::kIfNameLen) {
       throw std::invalid_argument("interface name too long: " + name);
     }
-    Port port;
-    port.name = name;
-    port.ifindex = static_cast<int>(::if_nametoindex(name.c_str()));
-    if (port.ifindex == 0) {
+    PortRuntime rt;
+    rt.ifindex = static_cast<int>(::if_nametoindex(name.c_str()));
+    if (rt.ifindex == 0) {
       throw std::runtime_error("no such interface: " + name);
     }
-    ports_.push_back(port);
+    runtime_.push_back(rt);
   }
 }
 
@@ -58,7 +61,57 @@ std::string ControlPlane::dataplane_socket_path() const {
   return options_.run_dir + "/" + options_.name + ".dp.sock";
 }
 
+std::string ControlPlane::cli_socket_path() const {
+  return options_.run_dir + "/" + options_.name + ".cli.sock";
+}
+
+void ControlPlane::load_startup_config(const std::string& path) {
+  std::ifstream in(path);
+  if (!in) {
+    throw std::runtime_error("cannot read startup config " + path);
+  }
+  std::string line;
+  int number = 0;
+  while (std::getline(in, line)) {
+    ++number;
+    const auto tokens = tokenize(line);
+    if (tokens.empty()) {
+      continue;
+    }
+    const auto result = apply_config(config_, tokens);
+    if (!result.ok) {
+      throw std::runtime_error(path + ":" + std::to_string(number) + ": " + result.message);
+    }
+  }
+  log::info("loaded startup config ", path, " (", number, " lines)");
+}
+
+std::string ControlPlane::execute(const std::string& line) {
+  const auto tokens = tokenize(line);
+  if (tokens.empty()) {
+    return {};
+  }
+  if (tokens[0] == "show") {
+    return show(tokens);
+  }
+  if (!is_config_command(tokens)) {
+    return "% unknown command '" + tokens[0] + "' (try 'show help')\n";
+  }
+  const auto result = apply_config(config_, tokens);
+  if (!result.ok) {
+    return "% " + result.message + "\n";
+  }
+  if (result.changed) {
+    log::info("config: ", line);
+    schedule_publish();
+  }
+  return result.message.empty() ? std::string{} : result.message + "\n";
+}
+
 void ControlPlane::start() {
+  if (!options_.config_file.empty()) {
+    load_startup_config(options_.config_file);
+  }
   ::mkdir(options_.run_dir.c_str(), 0755);
   memory_ = shm::create_region_memory("softswitch-" + options_.name);
   region_ = &shm::construct_region(memory_);
@@ -76,8 +129,10 @@ void ControlPlane::start() {
       publish_now();
     }
   });
-  log::info("switch ", options_.name, " bridge MAC ", bridge_mac_.to_string(), ", ", ports_.size(),
-            " ports; waiting for data plane on ", dataplane_socket_path());
+  cli_ = std::make_unique<CliServer>(*loop_, cli_socket_path(),
+                                     [this](const std::string& line) { return execute(line); });
+  log::info("switch ", options_.name, " bridge MAC ", bridge_mac_.to_string(), ", ",
+            runtime_.size(), " ports; waiting for data plane on ", dataplane_socket_path());
 }
 
 void ControlPlane::accept_dataplane() {
@@ -158,29 +213,20 @@ void ControlPlane::publish_now() {
   }
   build_tables(*staged);
   publisher_->publish();
+  ++publishes_;
   publish_pending_ = false;
 }
 
 void ControlPlane::build_tables(shm::Tables& t) const {
-  t.num_ports = static_cast<std::uint32_t>(ports_.size());
   t.router_mac = bridge_mac_;
   t.flags = 0;
-  t.vlans.fill(shm::VlanEntry{});
-  for (std::size_t i = 0; i < ports_.size(); ++i) {
-    const Port& port = ports_[i];
+  apply_l2_config(config_, t);
+  for (std::size_t i = 0; i < runtime_.size() && i < kMaxPorts; ++i) {
     shm::PortEntry& e = t.ports[i];
-    e = shm::PortEntry{};
-    std::copy_n(port.name.begin(), std::min(port.name.size(), shm::kIfNameLen - 1), e.name.begin());
-    e.ifindex = port.ifindex;
-    e.flags = static_cast<std::uint8_t>((port.admin_up ? shm::port_flag::kAdminUp : 0) |
-                                        (port.oper_up ? shm::port_flag::kOperUp : 0));
-    e.pvid = port.pvid;
-    e.stp_state = shm::StpState::kForwarding;
-    // M1: every port is an untagged member of its PVID.
-    auto& vlan = t.vlans[port.pvid];
-    vlan.flags = shm::vlan_flag::kActive;
-    vlan.members |= port_bit(static_cast<PortId>(i));
-    vlan.untagged |= port_bit(static_cast<PortId>(i));
+    e.ifindex = runtime_[i].ifindex;
+    e.flags = static_cast<std::uint8_t>(runtime_[i].oper_up ? (e.flags | shm::port_flag::kOperUp)
+                                                            : (e.flags & ~shm::port_flag::kOperUp));
+    e.stp_state = shm::StpState::kForwarding;  // M3: driven by RSTP
   }
   shm::clear_dynamic(t);
 }

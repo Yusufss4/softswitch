@@ -15,7 +15,8 @@
 namespace {
 
 void usage() {
-  std::cout << "usage: softswitchd --name NAME --ports IF1,IF2,... [--run-dir DIR] [--debug]\n";
+  std::cout << "usage: softswitchd --name NAME --ports IF1,IF2,... [--config FILE] [--run-dir DIR] "
+               "[--debug]\n";
 }
 
 std::vector<std::string> split_csv(const std::string& text) {
@@ -46,6 +47,8 @@ int run(std::span<char*> args) {
       options.ports = split_csv(value());
     } else if (arg == "--run-dir") {
       options.run_dir = value();
+    } else if (arg == "--config") {
+      options.config_file = value();
     } else if (arg == "--debug") {
       softswitch::log::set_level(softswitch::log::Level::kDebug);
     } else if (arg == "--version") {
