@@ -5,6 +5,7 @@ include(GoogleTest)
 add_executable(softswitch_tests
   test_mac_table.cpp
   test_types.cpp
+  dp/test_pipeline_flood.cpp
   pkt/test_ethernet.cpp
   pkt/test_igmp_bpdu.cpp
   pkt/test_ipv4_icmp_arp.cpp
@@ -12,7 +13,7 @@ add_executable(softswitch_tests
   shm/test_spsc_ring.cpp
   shm/test_tables.cpp
 )
-target_include_directories(softswitch_tests PRIVATE pkt)
+target_include_directories(softswitch_tests PRIVATE pkt dp)
 target_link_libraries(softswitch_tests PRIVATE softswitch::proto GTest::gtest_main)
 gtest_discover_tests(softswitch_tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS unit)
 
