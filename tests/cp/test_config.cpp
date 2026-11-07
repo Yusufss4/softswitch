@@ -90,6 +90,19 @@ TEST(ConfigCommands, RejectedVlanCommandChangesNothing) {
   EXPECT_EQ(c, before);
 }
 
+TEST(ConfigCommands, StaticMacEntries) {
+  auto c = sample();
+  EXPECT_TRUE(run(c, "mac address-table static 02:00:00:00:00:aa vlan 10 interface p2").ok);
+  EXPECT_TRUE(
+      run(c, "mac address-table static 02:00:00:00:00:aa vlan 10 interface p3").ok);  // replaces
+  ASSERT_EQ(c.static_macs.size(), 1U);
+  EXPECT_EQ(c.static_macs[0].port, "p3");
+  EXPECT_FALSE(run(c, "mac address-table static 01:00:5e:00:00:01 vlan 10 interface p2").ok);
+  EXPECT_FALSE(run(c, "mac address-table static 02:00:00:00:00:aa vlan 10 interface nope").ok);
+  EXPECT_TRUE(run(c, "no mac address-table static 02:00:00:00:00:aa vlan 10").ok);
+  EXPECT_TRUE(c.static_macs.empty());
+}
+
 TEST(ConfigCommands, IsConfigCommand) {
   EXPECT_TRUE(is_config_command(tokenize("vlan 10")));
   EXPECT_TRUE(is_config_command(tokenize("no vlan 10")));

@@ -10,7 +10,7 @@ function(softswitch_add_fuzzer name)
   target_link_options(${name} PRIVATE -fsanitize=fuzzer,address,undefined)
 endfunction()
 
-softswitch_add_fuzzer(fuzz_mac_table)
 softswitch_add_fuzzer(fuzz_packet)
 softswitch_add_fuzzer(fuzz_config)
+softswitch_add_fuzzer(fuzz_fdb)
 softswitch_add_fuzzer(fuzz_pipeline)
