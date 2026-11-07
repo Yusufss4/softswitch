@@ -17,6 +17,8 @@
 #include "softswitch/common/log.hpp"
 #include "softswitch/pkt/bpdu.hpp"
 #include "softswitch/pkt/ethernet.hpp"
+#include "softswitch/pkt/igmp.hpp"
+#include "softswitch/pkt/ipv4.hpp"
 #include "softswitch/shm/handshake.hpp"
 #include "softswitch/shm/region_mapping.hpp"
 #include "softswitch/sys/unix_socket.hpp"
@@ -110,6 +112,16 @@ std::string ControlPlane::execute(const std::string& line) {
   if (result.changed) {
     log::info("config: ", line);
     reconcile_fdb();
+    for (const auto& [vlan, routers] : std::map(snooper_.mrouter_ports())) {
+      if (!config_.snooping_in(vlan)) {
+        (void)snooper_.clear_vlan(vlan);
+      }
+    }
+    for (const auto& [key, ports] : std::map(snooper_.groups())) {
+      if (!config_.snooping_in(key.vlan)) {
+        (void)snooper_.clear_vlan(key.vlan);
+      }
+    }
     const bool timers_changed =
         rstp_ && (rstp_->config().hello_time.count() != config_.stp_hello ||
                   rstp_->config().max_age.count() != config_.stp_max_age ||
@@ -143,7 +155,10 @@ void ControlPlane::start() {
   listener_ = sys::unix_listen(dataplane_socket_path(), SOCK_SEQPACKET);
   loop_->add(listener_.get(), EPOLLIN, [this](std::uint32_t) { accept_dataplane(); });
   loop_->add(notify_fd_.get(), EPOLLIN, [this](std::uint32_t) { on_notify(); });
-  loop_->every(std::chrono::seconds{1}, [this] { age_fdb(); });
+  loop_->every(std::chrono::seconds{1}, [this] {
+    age_fdb();
+    igmp_tick();
+  });
   // Retry publishes that timed out waiting for a grace period.
   loop_->every(std::chrono::milliseconds{20}, [this] {
     if (publish_pending_) {
@@ -235,6 +250,8 @@ void ControlPlane::on_notify() {
       if (const auto bpdu = pkt::parse_bpdu_frame(frame)) {
         rstp_->receive(msg->port, *bpdu, stp::Clock::now());
       }
+    } else if (msg->reason == shm::PuntReason::kIgmp && msg->port < runtime_.size()) {
+      on_igmp(*msg);
     }
     region_->punt.pop();
   }
@@ -263,6 +280,7 @@ void ControlPlane::on_link(const LinkEvent& ev) {
     if (!up) {
       // Stations behind a dead link are unreachable through it: forget them now rather than
       // black-holing their traffic until they age out.
+      (void)snooper_.on_port_down(port);
       const auto flushed = fdb_.flush(port, std::nullopt);
       if (flushed != 0) {
         log::info("flushed ", flushed, " MAC entries learned on ", config_.ports[i].name);
@@ -341,20 +359,131 @@ void ControlPlane::sync_stp() {
   }
 }
 
-void ControlPlane::inject_raw(PortId port, std::span<const std::uint8_t> frame) {
+void ControlPlane::inject(const shm::PacketMessage& prototype,
+                          std::span<const std::uint8_t> frame) {
   shm::PacketMessage* msg = region_->inject.reserve();
   if (msg == nullptr || frame.size() > msg->data.size()) {
     ++inject_drops_;
     return;
   }
-  msg->port = port;
-  msg->vlan = 0;
+  msg->port = prototype.port;
+  msg->vlan = prototype.vlan;
   msg->len = static_cast<std::uint16_t>(frame.size());
   msg->reason = shm::PuntReason::kNone;
-  msg->flags = shm::inject_flag::kRaw;
+  msg->flags = prototype.flags;
   std::copy(frame.begin(), frame.end(), msg->data.begin());
   region_->inject.commit();
   (void)sys::eventfd_signal(kick_fd_.get());
+}
+
+void ControlPlane::inject_raw(PortId port, std::span<const std::uint8_t> frame) {
+  shm::PacketMessage proto;
+  proto.port = port;
+  proto.flags = shm::inject_flag::kRaw;
+  inject(proto, frame);
+}
+
+void ControlPlane::inject_vlan(VlanId vlan, std::span<const std::uint8_t> frame) {
+  shm::PacketMessage proto;
+  proto.vlan = vlan;
+  proto.flags = shm::inject_flag::kVlan;
+  inject(proto, frame);
+}
+
+void ControlPlane::on_igmp(const shm::PacketMessage& msg) {
+  if (!config_.snooping_in(msg.vlan)) {
+    return;
+  }
+  const auto frame = std::span<const std::uint8_t>(msg.data.data(), msg.len);
+  const auto eth = pkt::parse_ethernet(frame);
+  if (!eth) {
+    return;
+  }
+  const auto l3 = frame.subspan(eth->payload_offset);
+  const auto ip = pkt::parse_ipv4(l3);
+  if (!ip || ip->protocol != pkt::kIpProtoIgmp) {
+    return;
+  }
+  const auto m = pkt::parse_igmp(l3.subspan(ip->header_len, ip->total_len - ip->header_len));
+  if (!m) {
+    return;
+  }
+  const auto now = stp::Clock::now();
+  const PortId port = msg.port;
+  const bool fast_leave = config_.igmp_fast_leave && config_.ports[port].stp_edge;
+  bool changed = false;
+  auto leave = [&](Ipv4Address group) {
+    changed = snooper_.on_leave(msg.vlan, group, port, fast_leave, now) || changed;
+    if (!fast_leave && config_.igmp_querier) {
+      // Others may still listen behind this port: ask them (group-specific query, 1 s).
+      send_igmp_query(msg.vlan, group, 10);
+    }
+  };
+  switch (m->type) {
+    case pkt::kIgmpQuery:
+      changed = snooper_.on_query(msg.vlan, port, now);
+      break;
+    case pkt::kIgmpV1Report:
+    case pkt::kIgmpV2Report:
+      changed = snooper_.on_report(msg.vlan, m->group, port, now);
+      break;
+    case pkt::kIgmpV2Leave:
+      leave(m->group);
+      break;
+    case pkt::kIgmpV3Report:
+      for (std::size_t i = 0; i < m->num_records; ++i) {
+        const auto& r = m->records[i];
+        if (pkt::IgmpMessage::record_is_join(r)) {
+          changed = snooper_.on_report(msg.vlan, r.group, port, now) || changed;
+        } else if (r.type == pkt::kIgmpChangeToInclude || r.type == pkt::kIgmpModeIsInclude) {
+          leave(r.group);
+        }
+      }
+      break;
+    default:
+      break;
+  }
+  if (changed) {
+    log::debug("igmp: vlan ", msg.vlan, " membership changed on ", config_.ports[port].name);
+    schedule_publish();
+  }
+}
+
+void ControlPlane::send_igmp_query(VlanId vlan, Ipv4Address group, std::uint8_t max_resp_tenths) {
+  std::array<std::uint8_t, pkt::kMinFrameLen> frame{};
+  const auto len =
+      pkt::build_igmp_query_frame(frame, bridge_mac_, Ipv4Address{}, group, max_resp_tenths);
+  inject_vlan(vlan, std::span{frame}.first(len));
+}
+
+void ControlPlane::igmp_tick() {
+  const auto now = stp::Clock::now();
+  if (snooper_.tick(now)) {
+    schedule_publish();
+  }
+  if (!config_.igmp_querier) {
+    next_query_.clear();
+    startup_queries_left_.clear();
+    return;
+  }
+  const auto interval = std::chrono::seconds{config_.igmp_query_interval};
+  for (const auto& [vid, vlan] : config_.vlans) {
+    (void)vlan;
+    if (!config_.snooping_in(vid)) {
+      continue;
+    }
+    auto [it, fresh] = next_query_.try_emplace(vid, now);
+    if (fresh) {
+      startup_queries_left_[vid] = 2;  // RFC 3376 startup query count
+    }
+    if (now < it->second) {
+      continue;
+    }
+    send_igmp_query(vid, Ipv4Address{}, 100);  // general query, 10 s max response
+    int& startup = startup_queries_left_[vid];
+    it->second = now + (startup > 0 ? interval / 4 : interval);
+    startup = startup > 0 ? startup - 1 : 0;
+  }
 }
 
 void ControlPlane::reconcile_fdb() {
@@ -466,6 +595,21 @@ void ControlPlane::build_tables(shm::Tables& t) const {
     e.stp_state = i < stp_state_.size() ? stp_state_[i] : shm::StpState::kForwarding;
   }
   shm::clear_dynamic(t);
+  for (const auto& [vid, vlan] : config_.vlans) {
+    (void)vlan;
+    if (config_.snooping_in(vid)) {
+      t.vlans[vid].flags =
+          static_cast<std::uint8_t>(t.vlans[vid].flags | shm::vlan_flag::kIgmpSnooping);
+      t.vlans[vid].mrouters = snooper_.mrouters(vid) & t.vlans[vid].members;
+    }
+  }
+  for (const auto& [key, ports] : snooper_.groups()) {
+    if (config_.snooping_in(key.vlan) &&
+        !shm::mdb_insert(t, key.group, key.vlan, snooper_.members(key.vlan, key.group))) {
+      log::warn("data-plane MDB full; group ", key.group.to_string(), " not published");
+      break;
+    }
+  }
   for (const auto& [key, e] : fdb_.entries()) {
     if (!shm::fdb_insert(t, e.mac, e.vlan, e.port, e.is_static)) {
       log::warn("data-plane FDB full; ", e.mac.to_string(), " not published");

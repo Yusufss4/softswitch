@@ -55,6 +55,8 @@ const char* drop_reason_name(shm::DropReason r) {
       return "no-route";
     case shm::DropReason::kPuntRingFull:
       return "punt-ring-full";
+    case shm::DropReason::kNoListeners:
+      return "no-listeners";
     case shm::DropReason::kCount:
       break;
   }
@@ -65,6 +67,7 @@ constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "show mac address-table [vlan ID] [interface PORT]\n"
     "show spanning-tree\n"
+    "show ip igmp snooping\n"
     "clear mac address-table [dynamic] [vlan ID] [interface PORT]\n"
     "vlan ID [name NAME] | no vlan ID\n"
     "interface PORT description TEXT | shutdown | no shutdown\n"
@@ -77,6 +80,7 @@ constexpr const char* kHelp =
     "ID\n"
     "[no] spanning-tree | spanning-tree priority|hello-time|max-age|forward-time N\n"
     "interface PORT spanning-tree portfast | cost N | port-priority N\n"
+    "[no] ip igmp snooping [vlan ID | querier | fast-leave] | ip igmp snooping query-interval N\n"
     "trace sample N\n"
     "hostname NAME\n";
 
@@ -107,6 +111,9 @@ std::string ControlPlane::show(const std::vector<std::string>& t) const {
   }
   if (what == "spanning-tree") {
     return show_spanning_tree();
+  }
+  if (what == "ip" && t.size() > 2 && t[2] == "igmp") {
+    return show_igmp();
   }
   if (what == "help") {
     return kHelp;
@@ -253,6 +260,43 @@ std::string ControlPlane::show_spanning_tree() const {
                    std::to_string(st.bpdus_sent) + "/" + std::to_string(st.bpdus_received)});
   }
   return out.str() + table.render();
+}
+
+std::string ControlPlane::show_igmp() const {
+  const auto port_list = [this](const std::map<PortId, igmp::Clock::time_point>& ports) {
+    std::string out;
+    for (const auto& [port, expiry] : ports) {
+      out += (out.empty() ? "" : ",") + config_.ports[port].name;
+    }
+    return out;
+  };
+  const auto now = igmp::Clock::now();
+  std::ostringstream out;
+  out << "IGMP snooping: " << (config_.igmp_snooping ? "enabled" : "disabled") << "; querier: "
+      << (config_.igmp_querier ? "on (every " + std::to_string(config_.igmp_query_interval) + "s)"
+                               : std::string("off"))
+      << "; fast-leave on host ports: " << (config_.igmp_fast_leave ? "on" : "off") << "\n\n";
+  TextTable routers({"VLAN", "Snooping", "Mrouter ports"});
+  for (const auto& [vid, vlan] : config_.vlans) {
+    (void)vlan;
+    const auto it = snooper_.mrouter_ports().find(vid);
+    routers.add_row(
+        {std::to_string(vid), config_.snooping_in(vid) ? "on" : "off",
+         it == snooper_.mrouter_ports().end() ? std::string("-") : port_list(it->second)});
+  }
+  TextTable groups({"VLAN", "Group", "Ports", "Expires"});
+  for (const auto& [key, ports] : snooper_.groups()) {
+    auto soonest = ports.begin()->second;
+    for (const auto& [port, expiry] : ports) {
+      soonest = std::min(soonest, expiry);
+    }
+    groups.add_row(
+        {std::to_string(key.vlan), key.group.to_string(), port_list(ports),
+         std::to_string(std::chrono::duration_cast<std::chrono::seconds>(soonest - now).count()) +
+             "s"});
+  }
+  return out.str() + routers.render() + "\n" +
+         (groups.empty() ? std::string("no groups\n") : groups.render());
 }
 
 std::string ControlPlane::show_dataplane() const {
