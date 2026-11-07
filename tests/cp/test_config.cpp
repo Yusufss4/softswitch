@@ -103,6 +103,29 @@ TEST(ConfigCommands, StaticMacEntries) {
   EXPECT_TRUE(c.static_macs.empty());
 }
 
+TEST(ConfigCommands, SpanningTree) {
+  auto c = sample();
+  EXPECT_TRUE(run(c, "spanning-tree priority 4096").ok);
+  EXPECT_EQ(c.stp_priority, 4096);
+  EXPECT_FALSE(run(c, "spanning-tree priority 4097").ok);
+  EXPECT_FALSE(run(c, "spanning-tree hello-time 0").ok);
+  EXPECT_TRUE(run(c, "spanning-tree hello-time 1").ok);
+  EXPECT_TRUE(run(c, "no spanning-tree").ok);
+  EXPECT_FALSE(c.stp_enabled);
+  EXPECT_TRUE(run(c, "spanning-tree").ok);
+  EXPECT_TRUE(c.stp_enabled);
+  EXPECT_TRUE(run(c, "interface p1 spanning-tree portfast").ok);
+  EXPECT_TRUE(run(c, "interface p2 spanning-tree cost 4").ok);
+  EXPECT_TRUE(run(c, "interface p2 spanning-tree port-priority 64").ok);
+  EXPECT_FALSE(run(c, "interface p2 spanning-tree port-priority 65").ok);
+  EXPECT_FALSE(run(c, "interface p2 spanning-tree cost 0").ok);
+  EXPECT_TRUE(c.ports[0].stp_edge);
+  EXPECT_EQ(c.ports[1].stp_cost, 4U);
+  EXPECT_EQ(c.ports[1].stp_priority, 64);
+  EXPECT_TRUE(run(c, "interface p1 no spanning-tree portfast").ok);
+  EXPECT_FALSE(c.ports[0].stp_edge);
+}
+
 TEST(ConfigCommands, IsConfigCommand) {
   EXPECT_TRUE(is_config_command(tokenize("vlan 10")));
   EXPECT_TRUE(is_config_command(tokenize("no vlan 10")));

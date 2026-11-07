@@ -32,6 +32,9 @@ struct PortConfig {
   VlanId access_vlan = 1;
   VlanId native_vlan = 1;
   VlanSet trunk_allowed = all_vlans();
+  std::uint32_t stp_cost = 20000;   ///< Path cost (802.1D-2004 default for 1 Gb/s).
+  std::uint8_t stp_priority = 128;  ///< Port priority, multiples of 16.
+  bool stp_edge = false;            ///< "portfast": hosts only, forward at once.
 
   friend bool operator==(const PortConfig&, const PortConfig&) = default;
 };
@@ -56,6 +59,11 @@ struct SwitchConfig {
   std::map<VlanId, VlanConfig> vlans{{VlanId{1}, VlanConfig{"default"}}};
   std::uint32_t mac_aging_seconds = kDefaultMacAgingSeconds;
   std::vector<StaticMac> static_macs;
+  bool stp_enabled = true;
+  std::uint16_t stp_priority = 32768;  ///< Bridge priority, multiples of 4096.
+  std::uint32_t stp_hello = 2;
+  std::uint32_t stp_max_age = 20;
+  std::uint32_t stp_forward_delay = 15;
   std::uint32_t trace_sample = 0;
 
   /// Builds a default config with one access port in VLAN 1 per name.
