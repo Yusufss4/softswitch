@@ -20,7 +20,7 @@
 namespace softswitch::shm {
 
 inline constexpr std::uint64_t kRegionMagic = 0x3148435449575353ULL;  // "SSWITCH1"
-inline constexpr std::uint32_t kRegionVersion = 2;  ///< Bump on any layout change.
+inline constexpr std::uint32_t kRegionVersion = 3;  ///< Bump on any layout change.
 inline constexpr std::size_t kPacketDataLen = 1536;
 inline constexpr std::size_t kHitBits = 65536;  ///< FDB aging bitmap, indexed by fdb_hash.
 
@@ -120,6 +120,9 @@ struct alignas(kCacheLine) PortCounters {
   std::atomic<std::uint64_t> tx_packets{0};
   std::atomic<std::uint64_t> tx_bytes{0};
   std::atomic<std::uint64_t> drops{0};
+  /// Frames the kernel dropped because this port's RX ring was full (PACKET_STATISTICS).
+  /// Sampled about every 100 ms, so it lags a little.
+  std::atomic<std::uint64_t> rx_ring_drops{0};
 };
 
 /// Written only by the data plane. Counters are single-writer, so relaxed increments

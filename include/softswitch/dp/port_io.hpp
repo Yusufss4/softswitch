@@ -38,6 +38,9 @@ class PortIo {
   /// Kicks the kernel to send everything queued since the last flush.
   virtual void tx_flush() noexcept = 0;
   [[nodiscard]] virtual std::uint64_t tx_ring_full() const noexcept = 0;
+  /// Cumulative frames dropped by the kernel before reaching the RX ring. May cost a syscall,
+  /// so callers sample it rather than calling it per batch.
+  [[nodiscard]] virtual std::uint64_t rx_kernel_drops() noexcept { return 0; }
 };
 
 }  // namespace softswitch::dp

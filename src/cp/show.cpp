@@ -132,11 +132,13 @@ std::string ControlPlane::show_vlan() const {
 }
 
 std::string ControlPlane::show_counters() const {
-  TextTable ports({"Port", "RX packets", "RX bytes", "TX packets", "TX bytes", "Drops"});
+  TextTable ports(
+      {"Port", "RX packets", "RX bytes", "TX packets", "TX bytes", "Drops", "RX ring full"});
   for (std::size_t i = 0; i < config_.ports.size(); ++i) {
     const auto& c = region_->dp.ports[i];
     ports.add_row({config_.ports[i].name, u64(get(c.rx_packets)), u64(get(c.rx_bytes)),
-                   u64(get(c.tx_packets)), u64(get(c.tx_bytes)), u64(get(c.drops))});
+                   u64(get(c.tx_packets)), u64(get(c.tx_bytes)), u64(get(c.drops)),
+                   u64(get(c.rx_ring_drops))});
   }
   TextTable drops({"Drop reason", "Packets"});
   for (std::size_t r = 1; r < shm::kDropReasonCount; ++r) {

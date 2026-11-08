@@ -147,6 +147,15 @@ void AfPacketPort::bind_to(int fd, std::uint16_t protocol) const {
   }
 }
 
+std::uint64_t AfPacketPort::rx_kernel_drops() noexcept {
+  tpacket_stats stats{};
+  socklen_t len = sizeof(stats);
+  if (::getsockopt(rx_fd_.get(), SOL_PACKET, PACKET_STATISTICS, &stats, &len) == 0) {
+    rx_kernel_drops_ += stats.tp_drops;
+  }
+  return rx_kernel_drops_;
+}
+
 bool AfPacketPort::rx_ready() const noexcept {
   return (load_status(header(rx_.frame(rx_.next))) & TP_STATUS_USER) != 0;
 }
