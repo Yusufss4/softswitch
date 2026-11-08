@@ -178,6 +178,9 @@ void ControlPlane::start() {
       rstp_->tick(stp::Clock::now());
     }
   });
+  if (options_.http_port != 0) {
+    start_gui();
+  }
   cli_ = std::make_unique<CliServer>(*loop_, cli_socket_path(),
                                      [this](const std::string& line) { return execute(line); });
   log::info("switch ", options_.name, " bridge MAC ", bridge_mac_.to_string(), ", ",
