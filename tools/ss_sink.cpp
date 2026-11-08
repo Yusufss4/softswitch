@@ -1,15 +1,15 @@
 // ss-sink: counts ss-pktgen frames and measures one-way latency.
 //
-//   ss-sink --iface IF [--duration S] [--histogram FILE.csv] [--cpu N]
+//   ss-sink --iface IF [--duration S] [--cpu N]
 //
 // Latency = CLOCK_MONOTONIC at receive minus the timestamp ss-pktgen wrote, so it covers the
 // sender's TX ring, both veth hops and the switch. Every sample is kept (they are 4 bytes), so
-// percentiles are exact. Prints one JSON line; optionally writes a log-spaced histogram CSV.
+// percentiles are exact. Prints one JSON line, including a log-spaced latency histogram
+// ("hist": [[upper_us, count], ...], 8 buckets per power of two).
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <exception>
-#include <fstream>
 #include <iostream>
 #include <span>
 #include <string>
@@ -36,7 +36,6 @@ double percentile(const std::vector<std::uint32_t>& sorted, double p) {
 
 int run(std::span<char*> args) {
   std::string iface;
-  std::string histogram;
   double duration = 6.0;
   int cpu = -1;
   ArgReader reader(args);
@@ -46,12 +45,10 @@ int run(std::span<char*> args) {
       iface = reader.value(a);
     else if (a == "--duration")
       duration = std::stod(reader.value(a));
-    else if (a == "--histogram")
-      histogram = reader.value(a);
     else if (a == "--cpu")
       cpu = std::stoi(reader.value(a));
     else {
-      std::cerr << "usage: ss-sink --iface IF [--duration S] [--histogram FILE] [--cpu N]\n";
+      std::cerr << "usage: ss-sink --iface IF [--duration S] [--cpu N]\n";
       return 2;
     }
   }
@@ -100,23 +97,26 @@ int run(std::span<char*> args) {
             << ",\"p50\":" << percentile(latency, 0.50) << ",\"p90\":" << percentile(latency, 0.90)
             << ",\"p99\":" << percentile(latency, 0.99)
             << ",\"p999\":" << percentile(latency, 0.999)
-            << ",\"max\":" << (latency.empty() ? 0 : latency.back() / 1000.0) << "}}\n";
+            << ",\"max\":" << (latency.empty() ? 0 : latency.back() / 1000.0) << "}";
 
-  if (!histogram.empty()) {
-    // Log-spaced buckets: 8 per power of two, from 1 us to ~16 s.
-    std::ofstream csv(histogram);
-    csv << "upper_us,count\n";
-    std::size_t idx = 0;
-    for (int b = 0; b < 8 * 24; ++b) {
-      const double upper_us = std::pow(2.0, b / 8.0);
-      std::uint64_t count = 0;
-      while (idx < latency.size() && latency[idx] / 1000.0 <= upper_us) {
-        ++count;
-        ++idx;
-      }
-      if (count != 0) csv << upper_us << "," << count << "\n";
+  // Log-spaced buckets: 8 per power of two, from 1 us to ~16 s; empty buckets are left out.
+  // Part of the JSON rather than a file, so the tool never opens a path it was given.
+  std::cout << ",\"hist\":[";
+  std::size_t idx = 0;
+  bool first = true;
+  for (int b = 0; b < 8 * 24; ++b) {
+    const double upper_us = std::pow(2.0, b / 8.0);
+    std::uint64_t count = 0;
+    while (idx < latency.size() && latency[idx] / 1000.0 <= upper_us) {
+      ++count;
+      ++idx;
+    }
+    if (count != 0) {
+      std::cout << (first ? "" : ",") << "[" << upper_us << "," << count << "]";
+      first = false;
     }
   }
+  std::cout << "]}\n";
   return 0;
 }
 

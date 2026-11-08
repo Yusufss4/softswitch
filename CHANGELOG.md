@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `ss-pktgen` and `ss-sink`: AF_PACKET traffic generator and sink with sequence numbers and
-  one-way latency (exact percentiles, log-spaced histogram CSV).
+  one-way latency (exact percentiles and a log-spaced histogram in its JSON output).
 - `scripts/bench.sh`: one-switch benchmark with an RFC 2544-style no-drop-rate search, a
   saturation sweep (64/512/1500-byte frames), latency at fixed rates, the Linux bridge as a
   baseline, and loss attributed to the switch or the sink. `scripts/bench_report.py` renders the

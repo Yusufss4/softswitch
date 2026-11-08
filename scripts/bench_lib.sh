@@ -93,10 +93,8 @@ switch_counters() {
 measure() {
   local label=$1 size=$2 rate=$3 hist=${4:-}
   local before after
-  local hist_args=()
-  [[ -n "$hist" ]] && hist_args=(--histogram "$OUT/$hist")
   sudo ip netns exec bsink "$BIN/ss-sink" --iface eth0 --cpu 2 --duration "$(awk "BEGIN{print $DURATION + 1.5}")" \
-    "${hist_args[@]}" >"$RUN/sink.json" &
+    >"$RUN/sink.json" &
   local sink=$!
   sleep 0.5
   before=$(switch_counters)
@@ -110,9 +108,13 @@ measure() {
   line=$(python3 -c '
 import json, sys
 g, s, b, a = (json.loads(x) for x in sys.argv[1:5])
+hist = s.pop("hist", [])
+if sys.argv[8]:  # latency histogram CSV requested
+    with open(sys.argv[8], "w") as f:
+        f.write("upper_us,count\n" + "".join(f"{u:g},{c}\n" for u, c in hist))
 print(json.dumps({"label": sys.argv[5], "size": int(sys.argv[6]), "rate": int(sys.argv[7]),
                   "gen": g, "sink": s, "switch": {k: a[k] - b[k] for k in a}}))
-' "$gen" "$(cat "$RUN/sink.json")" "$before" "$after" "$label" "$size" "$rate")
+' "$gen" "$(cat "$RUN/sink.json")" "$before" "$after" "$label" "$size" "$rate" "${hist:+$OUT/$hist}")
   echo "$line" | tee -a "$RESULTS"
 }
 
