@@ -257,7 +257,7 @@ jobs:
             --benchmark_min_time=0.2s \
             --benchmark_format=json --benchmark_out=bench.json
       - name: Restore baseline from main
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ./benchmark-cache
           key: benchmark-${{ runner.arch }}-${{ github.run_id }}
@@ -274,7 +274,7 @@ jobs:
           summary-always: true
       - name: Save new baseline (main only)
         if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ./benchmark-cache
           key: benchmark-${{ runner.arch }}-${{ github.run_id }}
