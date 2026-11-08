@@ -12,7 +12,7 @@ like the software stack on a Marvell or Broadcom switch: a **control plane** own
 configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
 packets using tables the control plane publishes through shared memory.
 
-> **Status:** M4 done: 802.1Q VLANs, MAC learning/aging, Rapid Spanning Tree, IGMP snooping and a CLI on the split control/data plane. See the
+> **Status:** M5 done: 802.1Q VLANs, MAC learning/aging, Rapid Spanning Tree, IGMP snooping and inter-VLAN routing with ARP/ICMP, on the split control/data plane. See the
 > [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
 
 ## Planned features
@@ -30,6 +30,7 @@ packets using tables the control plane publishes through shared memory.
     cmake --preset release && cmake --build --preset release
     scripts/topo.sh up --loop && scripts/switches.sh start   # 3 switches in a loop, 5 hosts
     sudo ip netns exec h1 ping 10.0.10.13                 # h1 -> h3 across two switches
+    sudo ip netns exec h1 ping 10.0.20.22                 # h1 -> h2, routed VLAN 10 -> 20 by sw1
     build/release/sscli -s sw2 show spanning-tree        # one port blocks the loop
     build/release/sscli -s sw1 show mac address-table
     build/release/sscli -s sw1                            # interactive CLI
