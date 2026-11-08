@@ -1,0 +1,17 @@
+attached:        yes (pid 131624)
+heartbeat age:   485 us
+batches:         96828
+rx/tx packets:   100000 / 100000
+learn events:    2 sent, 2 processed
+max batch time:  22 us
+table publishes: 5679 (seq 5679, acked 4153)
+max grace wait:  0 us, timeouts 0
+publish mode:    mutex-pi
+table lock:      96828 batches, mean wait 2536 ns, max wait 114 us
+
+Ring             Depth  Capacity  Dropped
+---------------  -----  --------  -------
+learn (dp->cp)   0      4096      0
+punt (dp->cp)    0      256       0
+inject (cp->dp)  0      256       0
+trace (dp->cp)   0      8192      0

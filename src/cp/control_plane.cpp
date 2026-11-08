@@ -149,7 +149,9 @@ void ControlPlane::start() {
   ::mkdir(options_.run_dir.c_str(), 0755);
   memory_ = shm::create_region_memory("softswitch-" + options_.name);
   region_ = &shm::construct_region(memory_);
+  shm::set_publish_mode(*region_, options_.publish_mode);
   publisher_ = std::make_unique<shm::TablePublisher>(*region_);
+  publisher_->set_exclusive(options_.publish_mode != shm::PublishMode::kQsbr);
   notify_fd_ = sys::make_eventfd();
   kick_fd_ = sys::make_eventfd();
   publish_now();
@@ -165,6 +167,10 @@ void ControlPlane::start() {
       schedule_publish();
     }
   });
+  if (options_.publish_hz != 0) {
+    loop_->every(std::chrono::nanoseconds{1'000'000'000 / options_.publish_hz},
+                 [this] { publish_now(); });
+  }
   // Retry publishes that timed out waiting for a grace period.
   loop_->every(std::chrono::milliseconds{20}, [this] {
     if (publish_pending_) {
@@ -618,6 +624,19 @@ void ControlPlane::schedule_publish() {
 }
 
 void ControlPlane::publish_now() {
+  // Lock modes (demo only): hold the shared lock for the whole rebuild, the way a naive design
+  // "locks the tables while updating them". The data plane takes the same lock per batch.
+  const bool locked = region_->publish_mode != shm::PublishMode::kQsbr;
+  if (locked) {
+    (void)::pthread_mutex_lock(&region_->table_lock);
+  }
+  publish_tables();
+  if (locked) {
+    (void)::pthread_mutex_unlock(&region_->table_lock);
+  }
+}
+
+void ControlPlane::publish_tables() {
   shm::Tables* staged = publisher_->begin_update(std::chrono::milliseconds{5});
   if (staged == nullptr) {
     publish_pending_ = true;

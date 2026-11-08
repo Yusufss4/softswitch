@@ -42,10 +42,15 @@ class TablePublisher {
   /// True once the data plane has stopped using the copy retired by the last publish.
   [[nodiscard]] bool grace_period_over() const noexcept;
 
+  /// Lock-based publish modes: the caller holds the table lock, which already excludes the
+  /// data plane, so begin_update() must not wait for it (it would wait on a blocked reader).
+  void set_exclusive(bool exclusive) noexcept { exclusive_ = exclusive; }
+
  private:
   SharedRegion* region_;
   std::uint64_t seq_ = 0;
   bool updating_ = false;
+  bool exclusive_ = false;
   std::chrono::nanoseconds max_wait_{0};
   std::uint64_t timeouts_ = 0;
 };

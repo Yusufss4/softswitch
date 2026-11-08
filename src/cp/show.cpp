@@ -132,11 +132,13 @@ std::string ControlPlane::show_vlan() const {
 }
 
 std::string ControlPlane::show_counters() const {
-  TextTable ports({"Port", "RX packets", "RX bytes", "TX packets", "TX bytes", "Drops"});
+  TextTable ports(
+      {"Port", "RX packets", "RX bytes", "TX packets", "TX bytes", "Drops", "RX ring full"});
   for (std::size_t i = 0; i < config_.ports.size(); ++i) {
     const auto& c = region_->dp.ports[i];
     ports.add_row({config_.ports[i].name, u64(get(c.rx_packets)), u64(get(c.rx_bytes)),
-                   u64(get(c.tx_packets)), u64(get(c.tx_bytes)), u64(get(c.drops))});
+                   u64(get(c.tx_packets)), u64(get(c.tx_bytes)), u64(get(c.drops)),
+                   u64(get(c.rx_ring_drops))});
   }
   TextTable drops({"Drop reason", "Packets"});
   for (std::size_t r = 1; r < shm::kDropReasonCount; ++r) {
@@ -316,7 +318,14 @@ std::string ControlPlane::show_dataplane() const {
       << dp.ack_seq.load() << ")\n"
       << "max grace wait:  "
       << std::chrono::duration_cast<std::chrono::microseconds>(publisher_->max_wait()).count()
-      << " us, timeouts " << publisher_->timeouts() << "\n";
+      << " us, timeouts " << publisher_->timeouts() << "\n"
+      << "publish mode:    " << shm::to_string(region_->publish_mode) << "\n";
+  if (region_->publish_mode != shm::PublishMode::kQsbr) {
+    const std::uint64_t waits = get(dp.lock_waits);
+    out << "table lock:      " << waits << " batches, mean wait "
+        << (waits == 0 ? 0 : get(dp.lock_wait_total_ns) / waits) << " ns, max wait "
+        << get(dp.max_lock_wait_ns) / 1000 << " us\n";
+  }
   TextTable rings({"Ring", "Depth", "Capacity", "Dropped"});
   rings.add_row({"learn (dp->cp)", u64(region_->learn.size()), u64(region_->learn.kCapacity),
                  u64(region_->learn.drops())});

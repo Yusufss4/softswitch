@@ -150,6 +150,7 @@ std::string ControlPlane::state_json() const {
     w.field("rx_bytes", get(c.rx_bytes));
     w.field("tx_bytes", get(c.tx_bytes));
     w.field("drops", get(c.drops));
+    w.field("rx_ring_drops", get(c.rx_ring_drops));
     w.end_object();
   }
   w.end_array();

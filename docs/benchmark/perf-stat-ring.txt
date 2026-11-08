@@ -1,0 +1,16 @@
+
+ Performance counter stats for thread id '132795':
+
+          4,999.63 msec task-clock                       #    1.000 CPUs utilized
+                66      context-switches                 #   13.201 /sec
+                 0      cpu-migrations                   #    0.000 /sec
+    11,987,162,442      cycles                           #    2.398 GHz                         (87.44%)
+    22,448,179,679      instructions                     #    1.87  insn per cycle              (87.50%)
+     3,823,998,609      branches                         #  764.856 M/sec                       (87.52%)
+         3,466,361      branch-misses                    #    0.09% of all branches             (87.54%)
+     7,423,196,374      L1-dcache-loads                  #    1.485 G/sec                       (87.52%)
+        82,122,026      L1-dcache-load-misses            #    1.11% of all L1-dcache accesses   (87.52%)
+        63,532,190      LLC-loads                        #   12.707 M/sec                       (87.52%)
+        20,647,043      LLC-load-misses                  #   32.50% of all LL-cache accesses    (74.88%)
+
+       5.000968253 seconds time elapsed

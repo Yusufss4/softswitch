@@ -1,0 +1,16 @@
+attached:        yes (pid 131548)
+heartbeat age:   934 us
+batches:         99958
+rx/tx packets:   100000 / 100000
+learn events:    1 sent, 1 processed
+max batch time:  40 us
+table publishes: 5676 (seq 5676, acked 4147)
+max grace wait:  1 us, timeouts 0
+publish mode:    qsbr
+
+Ring             Depth  Capacity  Dropped
+---------------  -----  --------  -------
+learn (dp->cp)   0      4096      0
+punt (dp->cp)    0      256       0
+inject (cp->dp)  0      256       0
+trace (dp->cp)   0      8192      0

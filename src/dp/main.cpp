@@ -3,6 +3,7 @@
 #include <exception>
 #include <iostream>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -14,9 +15,9 @@
 namespace {
 
 void usage() {
-  std::cout
-      << "usage: ss-dataplane --socket PATH [--cpu N] [--priority N] [--no-rt]\n"
-         "                    [--require-rt] [--tx-mode ring|sendto] [--batch N] [--name TAG]\n";
+  std::cout << "usage: ss-dataplane --socket PATH [--cpu N] [--priority N] [--no-rt]\n"
+               "                    [--require-rt] [--tx-mode sendmmsg|ring|sendto] [--batch N] "
+               "[--name TAG]\n";
 }
 
 int run(std::span<char*> args) {
@@ -38,8 +39,12 @@ int run(std::span<char*> args) {
       options.require_rt = true;
     } else if (arg == "--tx-mode") {
       const auto mode = value();
-      options.tx_mode =
-          mode == "sendto" ? softswitch::dp::TxMode::kSendto : softswitch::dp::TxMode::kRing;
+      const auto parsed = softswitch::dp::parse_tx_mode(mode);
+      if (!parsed) {
+        throw std::invalid_argument("--tx-mode must be ring, sendto or sendmmsg, not '" + mode +
+                                    "'");
+      }
+      options.tx_mode = *parsed;
     } else if (arg == "--batch") {
       options.batch = static_cast<std::size_t>(std::stoul(value()));
     } else if (arg == "--name") {

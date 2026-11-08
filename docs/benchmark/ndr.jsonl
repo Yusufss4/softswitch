@@ -1,0 +1,8 @@
+{"label": "softswitch", "size": 64, "ndr_pps": 841020}
+{"label": "softswitch", "size": 512, "ndr_pps": 692523}
+{"label": "softswitch", "size": 1500, "ndr_pps": 557695}
+{"label": "softswitch-ring", "size": 64, "ndr_pps": 652307}
+{"label": "softswitch-sendto", "size": 64, "ndr_pps": 697358}
+{"label": "linux-bridge", "size": 64, "ndr_pps": 638443}
+{"label": "linux-bridge", "size": 512, "ndr_pps": 571214}
+{"label": "linux-bridge", "size": 1500, "ndr_pps": 496706}

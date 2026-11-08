@@ -23,7 +23,7 @@ struct DataPlaneOptions {
   int cpu = -1;                ///< Pin the forwarding thread to this CPU (-1 = don't).
   int priority = 50;           ///< SCHED_FIFO priority; 0 = keep SCHED_OTHER.
   bool require_rt = false;     ///< Fail instead of warning when RT setup is refused.
-  TxMode tx_mode = TxMode::kRing;
+  TxMode tx_mode = TxMode::kSendmmsg;
   std::size_t batch = 64;  ///< Max frames per port per batch.
 };
 

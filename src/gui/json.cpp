@@ -1,6 +1,9 @@
 #include "softswitch/gui/json.hpp"
 
 #include <array>
+#include <charconv>
+#include <cmath>
+#include <system_error>
 
 namespace softswitch::gui {
 
@@ -72,6 +75,17 @@ JsonWriter& JsonWriter::value(std::int64_t number) {
 JsonWriter& JsonWriter::value(bool flag) {
   separator();
   out_ += flag ? "true" : "false";
+  return *this;
+}
+
+JsonWriter& JsonWriter::value(double number) {
+  if (!std::isfinite(number)) {
+    return null();
+  }
+  separator();
+  std::array<char, 32> buf{};
+  const auto [end, ec] = std::to_chars(buf.data(), buf.data() + buf.size(), number);
+  out_.append(buf.data(), ec == std::errc{} ? end : buf.data());
   return *this;
 }
 

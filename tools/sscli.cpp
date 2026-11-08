@@ -71,7 +71,7 @@ int run(std::span<char*> args) {
       return 1;
     }
     std::cout << reply;
-    return reply.rfind("% ", 0) == 0 ? 1 : 0;
+    return reply.starts_with("% ") ? 1 : 0;
   }
   const bool tty = ::isatty(STDIN_FILENO) != 0;
   std::string line;

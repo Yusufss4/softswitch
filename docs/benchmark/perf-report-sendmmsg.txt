@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 24K of event 'cycles:P'
+# Event count (approx.): 11770184638
+#
+# Overhead  Symbol                                                                                                                                                                                                                  IPC   [IPC Coverage]
+# ........  ......................................................................................................................................................................................................................  ....................
+#
+    11.55%  [k] __packet_get_status                                                                                                                                                                                                 -      -
+     7.43%  [k] tpacket_rcv                                                                                                                                                                                                         -      -
+     3.72%  [.] softswitch::MacAddress::from_bytes(unsigned char const*)                                                                                                                                                            -      -
+     3.33%  [k] sock_wfree                                                                                                                                                                                                          -      -
+     3.11%  [k] sock_def_readable                                                                                                                                                                                                   -      -
+     2.96%  [k] __update_cpu_freelist_fast                                                                                                                                                                                          -      -
+     2.45%  [k] handle_softirqs                                                                                                                                                                                                     -      -
+     2.29%  [k] __skb_flow_dissect                                                                                                                                                                                                  -      -
+     2.15%  [k] memset                                                                                                                                                                                                              -      -
+     2.12%  [k] arch_counter_get_cntpct                                                                                                                                                                                             -      -
+     2.12%  [k] __netif_receive_skb_core.constprop.0                                                                                                                                                                                -      -
+     2.10%  [.] softswitch::dp::Pipeline::process(softswitch::shm::Tables const&, unsigned short, softswitch::dp::RxFrame const&, softswitch::dp::Egress&)                                                                          -      -
+     2.07%  [.] softswitch::shm::fdb_lookup(softswitch::shm::Tables const&, softswitch::MacAddress const&, unsigned short)                                                                                                          -      -
+     2.02%  [k] _raw_spin_unlock_irq                                                                                                                                                                                                -      -
+     1.97%  [k] packet_sendmsg                                                                                                                                                                                                      -      -
+     1.66%  [k] _raw_spin_unlock_irqrestore                                                                                                                                                                                         -      -
+     1.62%  [k] __dev_direct_xmit                                                                                                                                                                                                   -      -
+     1.41%  [k] kmem_cache_alloc_node_noprof                                                                                                                                                                                        -      -
+     1.38%  [k] net_rx_action                                                                                                                                                                                                       -      -
+     1.33%  [k] __arch_copy_from_user                                                                                                                                                                                               -      -
+     1.29%  [k] do_softirq                                                                                                                                                                                                          -      -
+     1.28%  [k] sk_skb_reason_drop                                                                                                                                                                                                  -      -
+     1.25%  [.] softswitch::dp::AfPacketPort::rx_burst(std::span<softswitch::dp::RxFrame, 18446744073709551615ul>)                                                                                                                  -      -
+     1.18%  [k] _raw_spin_lock                                                                                                                                                                                                      -      -
+     1.06%  [.] softswitch::pkt::parse_ethernet(std::span<unsigned char const, 18446744073709551615ul>)                                                                                                                             -      -
+     1.05%  [k] tcf_action_exec                                                                                                                                                                                                     -      -
+     1.00%  [k] packet_parse_headers                                                                                                                                                                                                -      -
+     0.94%  [.] softswitch::dp::Pipeline::learn_source(softswitch::shm::Tables const&, unsigned short, softswitch::dp::Pipeline::Classified const&)                                                                                 -      -
+     0.90%  [k] skb_set_owner_w                                                                                                                                                                                                     -      -
+     0.90%  [k] copy_msghdr_from_user                                                                                                                                                                                               -      -
+     0.88%  [k] tc_run                                                                                                                                                                                                              -      -
+     0.85%  [k] netdev_pick_tx                                                                                                                                                                                                      -      -
+     0.85%  [k] eth_type_trans                                                                                                                                                                                                      -      -
+     0.84%  [k] __packet_rcv_has_room                                                                                                                                                                                               -      -

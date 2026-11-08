@@ -8,10 +8,14 @@
 ///   control plane writes: `tables[inactive]`, `active`, `publish_seq`, the inject ring (producer)
 ///   data plane writes:    `dp`, the learn/punt/trace rings (producer)
 
+#include <pthread.h>
+
 #include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string_view>
 
 #include "softswitch/common/types.hpp"
 #include "softswitch/shm/spsc_ring.hpp"
@@ -20,7 +24,7 @@
 namespace softswitch::shm {
 
 inline constexpr std::uint64_t kRegionMagic = 0x3148435449575353ULL;  // "SSWITCH1"
-inline constexpr std::uint32_t kRegionVersion = 2;  ///< Bump on any layout change.
+inline constexpr std::uint32_t kRegionVersion = 3;  ///< Bump on any layout change.
 inline constexpr std::size_t kPacketDataLen = 1536;
 inline constexpr std::size_t kHitBits = 65536;  ///< FDB aging bitmap, indexed by fdb_hash.
 
@@ -120,6 +124,9 @@ struct alignas(kCacheLine) PortCounters {
   std::atomic<std::uint64_t> tx_packets{0};
   std::atomic<std::uint64_t> tx_bytes{0};
   std::atomic<std::uint64_t> drops{0};
+  /// Frames the kernel dropped because this port's RX ring was full (PACKET_STATISTICS).
+  /// Sampled about every 100 ms, so it lags a little.
+  std::atomic<std::uint64_t> rx_ring_drops{0};
 };
 
 /// Written only by the data plane. Counters are single-writer, so relaxed increments
@@ -137,6 +144,11 @@ struct DataPlaneState {
   std::atomic<std::uint64_t> punts{0};
   std::atomic<std::uint64_t> injected{0};
   std::atomic<std::uint64_t> max_batch_ns{0};
+  /// Lock-based publish modes only (the priority-inversion demo): time spent waiting for
+  /// SharedRegion::table_lock before a batch.
+  std::atomic<std::uint64_t> lock_waits{0};
+  std::atomic<std::uint64_t> lock_wait_total_ns{0};
+  std::atomic<std::uint64_t> max_lock_wait_ns{0};
   std::array<PortCounters, kMaxPorts> ports{};
   std::array<std::atomic<std::uint64_t>, kDropReasonCount> drops{};
   std::array<std::atomic<std::uint64_t>, kHitBits / 64> fdb_hits{};  ///< Set by DP, cleared by CP.
@@ -149,6 +161,19 @@ inline void bump(std::atomic<std::uint64_t>& counter, std::uint64_t by = 1) noex
 
 // ---- the region -----------------------------------------------------------------------------
 
+/// How the control plane hands new tables to the data plane. Only kQsbr is meant for use; the
+/// lock modes exist to demonstrate the priority inversion that design avoids (docs/design.md).
+enum class PublishMode : std::uint8_t {
+  kQsbr = 0,     ///< Double buffer + grace period. The data plane never waits.
+  kMutex = 1,    ///< One shared lock held by the control plane while it rebuilds, and by the
+                 ///< data plane around each batch. Unbounded inversion under contention.
+  kMutexPi = 2,  ///< As kMutex with PTHREAD_PRIO_INHERIT: the holder runs at the waiter's
+                 ///< priority, so the wait is bounded by the critical section.
+};
+
+[[nodiscard]] const char* to_string(PublishMode mode) noexcept;
+[[nodiscard]] std::optional<PublishMode> parse_publish_mode(std::string_view name) noexcept;
+
 struct SharedRegion {
   std::uint64_t magic = kRegionMagic;
   std::uint32_t version = kRegionVersion;
@@ -158,6 +183,11 @@ struct SharedRegion {
   alignas(kCacheLine) std::atomic<std::uint32_t> active{0};
   std::atomic<std::uint64_t> publish_seq{0};
   alignas(kCacheLine) std::array<Tables, 2> tables{};
+
+  /// Set by the control plane before the data plane attaches; constant afterwards.
+  alignas(kCacheLine) PublishMode publish_mode = PublishMode::kQsbr;
+  /// Process-shared mutex used only when publish_mode is a lock mode.
+  pthread_mutex_t table_lock{};
 
   DataPlaneState dp{};
 

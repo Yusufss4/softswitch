@@ -193,6 +193,16 @@ void DataPlane::forward_loop() noexcept {
   pfds.push_back({stop_fd_.get(), POLLIN, 0});
 
   auto& dp = region_->dp;
+  std::uint64_t next_stats_ns = 0;
+  const auto sample_kernel_drops = [&](std::uint64_t now) noexcept {
+    if (now < next_stats_ns) {
+      return;
+    }
+    next_stats_ns = now + 100'000'000;
+    for (std::size_t p = 0; p < ports_.size(); ++p) {
+      dp.ports[p].rx_ring_drops.store(ports_[p]->rx_kernel_drops(), std::memory_order_relaxed);
+    }
+  };
   while (!stopping_.load(std::memory_order_relaxed)) {
     const bool work =
         !region_->inject.empty() ||
@@ -203,10 +213,24 @@ void DataPlane::forward_loop() noexcept {
       if ((pfds[pfds.size() - 2].revents & POLLIN) != 0) {
         (void)sys::eventfd_drain(kick_fd_.get());
       }
-      dp.heartbeat_ns.store(sys::monotonic_ns(), std::memory_order_relaxed);
+      const std::uint64_t now = sys::monotonic_ns();
+      dp.heartbeat_ns.store(now, std::memory_order_relaxed);
+      sample_kernel_drops(now);
       continue;
     }
 
+    const bool locked = region_->publish_mode != shm::PublishMode::kQsbr;
+    if (locked) {
+      // Demo only: this is the wait the QSBR design exists to avoid.
+      const std::uint64_t asked = sys::monotonic_ns();
+      (void)::pthread_mutex_lock(&region_->table_lock);
+      const std::uint64_t waited = sys::monotonic_ns() - asked;
+      shm::bump(dp.lock_waits);
+      shm::bump(dp.lock_wait_total_ns, waited);
+      if (waited > dp.max_lock_wait_ns.load(std::memory_order_relaxed)) {
+        dp.max_lock_wait_ns.store(waited, std::memory_order_relaxed);
+      }
+    }
     const std::uint64_t batch_start = sys::monotonic_ns();
     const shm::Tables& tables = reader.enter();
     pipeline.set_now(batch_start);
@@ -231,6 +255,9 @@ void DataPlane::forward_loop() noexcept {
       port->tx_flush();
     }
     reader.exit();
+    if (locked) {
+      (void)::pthread_mutex_unlock(&region_->table_lock);
+    }
 
     if (pipeline.take_notify()) {
       (void)sys::eventfd_signal(notify_fd_.get());
@@ -242,6 +269,7 @@ void DataPlane::forward_loop() noexcept {
       dp.max_batch_ns.store(elapsed, std::memory_order_relaxed);
     }
     dp.heartbeat_ns.store(batch_start, std::memory_order_relaxed);
+    sample_kernel_drops(batch_start);
   }
   reader.go_idle();
 }
