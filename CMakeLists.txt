@@ -90,6 +90,8 @@ add_custom_command(
   DEPENDS ${_gui_asset_paths} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedAssets.cmake
   COMMENT "Embedding web GUI assets"
   VERBATIM)
+# Lets analysis tools generate the source without building everything (scripts/cppcheck.sh).
+add_custom_target(softswitch_gui_assets DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_assets.cpp")
 
 # ---- executables ------------------------------------------------------------
 add_executable(softswitchd src/cp/main.cpp)

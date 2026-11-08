@@ -10,6 +10,8 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 [[ -f "$BUILD_DIR/compile_commands.json" ]] || { echo "no compile_commands.json in $BUILD_DIR" >&2; exit 2; }
 
 cppcheck --version
+# Generated sources listed in the compile database must exist even in a configure-only tree.
+cmake --build "$BUILD_DIR" --target softswitch_gui_assets >/dev/null
 cppcheck \
   --project="$BUILD_DIR/compile_commands.json" \
   --file-filter="src/*" \
