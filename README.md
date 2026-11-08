@@ -47,6 +47,11 @@ See [the benchmark](docs/benchmark.md) and [the design note](docs/design.md).
     # browse http://<pi>:8081/ for the live view
     scripts/switches.sh stop && scripts/topo.sh down
 
+    # Eight switches in a ring with two chords; the GUI takes the switch list in ?sw=
+    export TOPOLOGY=large
+    scripts/topo.sh up --loop && scripts/switches.sh start   # GUI on 8081-8088
+    # browse http://<pi>:8081/?sw=<pi>:8081,<pi>:8082,...,<pi>:8088
+
 ## Architecture
 
 ![softswitch architecture](docs/images/architecture.svg)
@@ -68,6 +73,17 @@ tables. Sampling is set per switch with `trace sample N`.
 by sw1). After a few seconds the sw1–sw2 link goes down. RSTP unblocks the standby sw2–sw3 link,
 the switches flood briefly while their MAC tables relearn, and traffic reroutes through sw3 without
 a lost ping. When the link returns, the original tree is restored.*
+
+### Eight switches
+
+![softswitch web GUI with eight switches: two link failures and recovery](docs/images/gui-8-switches.gif)
+
+*Eight switches in a ring with two chords (`TOPOLOGY=large`), so RSTP has three loops to break.
+Four flows cross the network: inside VLAN 10, inside VLAN 20, and two routed by sw1. The sw1–sw5
+chord fails, then the sw1–sw8 link as well. Each time the tree rebuilds (watch the blocked
+ports and the path costs), the other chord takes over, and no flow loses a ping. Then both links
+return. Running this topology is what found the two failover bugs fixed in #61; it is now an
+integration test.*
 
 ## Build
 
