@@ -49,15 +49,7 @@ See [the benchmark](docs/benchmark.md) and [the design note](docs/design.md).
 
 ## Architecture
 
-```
- softswitchd (control plane, SCHED_OTHER)          ss-dataplane (ss-forward: SCHED_FIFO 50, pinned)
- ┌──────────────────────────────────────┐           ┌──────────────────────────────────────┐
- │ epoll loop: CLI · rtnetlink · GUI    │  memfd    │ RX rings ─▶ Pipeline::process ─▶ TX  │
- │ RSTP · IGMP · ARP/ICMP · FDB aging   │══════════▶│ reads tables[active] only            │
- │ rebuilds tables[!active], flips      │ rings +   │ learn/punt/trace ─▶ rings, never     │
- │ waits for the DP's grace period      │◀══════════│ blocks, never takes a lock           │
- └──────────────────────────────────────┘ eventfds  └──────────────────────────────────────┘
-```
+![softswitch architecture](docs/images/architecture.svg)
 
 The [design note](docs/design.md) covers the control path and the data path, table ownership,
 threading, and the priority inversion this design avoids, with measurements.
@@ -70,7 +62,12 @@ port states, links flashing as sampled packets cross them, a filterable live tra
 decisions (forwarded, flooded, routed, punted, dropped and why), and the MAC, IGMP, ARP and route
 tables. Sampling is set per switch with `trace sample N`.
 
-![softswitch web GUI](docs/images/gui.png)
+![softswitch web GUI: live forwarding and a spanning-tree failover](docs/images/gui.gif)
+
+*Recorded live from the Pi while hosts ping inside VLAN 10, inside VLAN 20 and across them (routed
+by sw1). After a few seconds the sw1–sw2 link goes down. RSTP unblocks the standby sw2–sw3 link,
+the switches flood briefly while their MAC tables relearn, and traffic reroutes through sw3 without
+a lost ping. When the link returns, the original tree is restored.*
 
 ## Build
 
