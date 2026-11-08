@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 690" width="1240" height="690" role="img" aria-labelledby="title desc">
+  <title id="title">softswitch architecture</title>
+  <desc id="desc">The control plane process softswitchd owns all state and publishes forwarding tables into shared memory. The data plane process ss-dataplane forwards packets from AF_PACKET rings using only the published tables and never waits for the control plane. Rings carry learn, punt and trace events to the control plane and packets to inject back to the data plane.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; fill: #1f2328; }
+      .title { font-size: 21px; font-weight: 700; }
+      .sub { font-size: 13px; fill: #57606a; }
+      .h { font-size: 17px; font-weight: 700; }
+      .hs { font-size: 12.5px; fill: #57606a; }
+      .sec { font-size: 11px; font-weight: 600; fill: #6e7781; letter-spacing: 0.06em; }
+      .t { font-size: 13px; }
+      .tb { font-size: 13px; font-weight: 600; }
+      .s { font-size: 11.5px; fill: #57606a; }
+      .lab { font-size: 11.5px; font-weight: 600; }
+      .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    </style>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f6fde"/></marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8590c"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="1239" height="689" rx="14" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- Header and legend -->
+  <text x="28" y="42" class="title">softswitch architecture</text>
+  <text x="28" y="65" class="sub">Two processes, like the software on a Marvell or Broadcom switch: the control plane owns the state, the data plane only forwards.</text>
+  <line x1="900" y1="30" x2="932" y2="30" stroke="#2f6fde" stroke-width="2.5" marker-end="url(#ab)"/>
+  <text x="942" y="34" class="s">written by the control plane</text>
+  <line x1="900" y1="50" x2="932" y2="50" stroke="#e8590c" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="942" y="54" class="s">written by the data plane</text>
+  <line x1="900" y1="70" x2="932" y2="70" stroke="#57606a" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ag)"/>
+  <text x="942" y="74" class="s">read only</text>
+
+  <!-- ============ Control plane ============ -->
+  <rect x="24" y="92" width="340" height="510" rx="12" fill="#f3f7ff" stroke="#2f6fde" stroke-width="1.5"/>
+  <text x="44" y="124" class="h" style="fill:#1b3a73">softswitchd</text>
+  <text x="44" y="144" class="hs">control plane · SCHED_OTHER · one epoll loop</text>
+
+  <text x="44" y="172" class="sec">INPUTS</text>
+  <rect x="44" y="180" width="300" height="30" rx="6" fill="#ffffff" stroke="#b6c8f0"/>
+  <text x="58" y="200" class="t"><tspan class="tb">sscli</tspan>  ·  CLI over a Unix socket</text>
+  <rect x="44" y="216" width="300" height="30" rx="6" fill="#ffffff" stroke="#b6c8f0"/>
+  <text x="58" y="236" class="t"><tspan class="tb">rtnetlink</tspan>  ·  link up / down</text>
+  <rect x="44" y="252" width="300" height="30" rx="6" fill="#ffffff" stroke="#b6c8f0"/>
+  <text x="58" y="272" class="t"><tspan class="tb">web GUI</tspan>  ·  HTTP + SSE, read-only</text>
+  <rect x="44" y="288" width="300" height="30" rx="6" fill="#ffffff" stroke="#b6c8f0"/>
+  <text x="58" y="308" class="t"><tspan class="tb">timers</tspan>  ·  timerfd, signalfd, eventfd</text>
+
+  <text x="44" y="348" class="sec">PROTOCOL STATE (PRIVATE)</text>
+  <g class="t">
+    <rect x="44" y="356" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="116.5" y="377" text-anchor="middle">RSTP</text>
+    <rect x="199" y="356" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="271.5" y="377" text-anchor="middle">IGMP snooping</text>
+    <rect x="44" y="396" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="116.5" y="417" text-anchor="middle">FDB + aging</text>
+    <rect x="199" y="396" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="271.5" y="417" text-anchor="middle">ARP · ICMP · routes</text>
+    <rect x="44" y="436" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="116.5" y="457" text-anchor="middle">VLANs · SVIs</text>
+    <rect x="199" y="436" width="145" height="32" rx="6" fill="#ffffff" stroke="#b6c8f0"/><text x="271.5" y="457" text-anchor="middle">startup config</text>
+  </g>
+
+  <text x="44" y="500" class="sec">PUBLISHING (QSBR)</text>
+  <rect x="44" y="508" width="300" height="76" rx="6" fill="#ffffff" stroke="#b6c8f0"/>
+  <text x="58" y="529" class="t">1. rebuild the inactive tables copy</text>
+  <text x="58" y="550" class="t">2. flip <tspan class="mono">active</tspan>, bump <tspan class="mono">publish_seq</tspan></text>
+  <text x="58" y="571" class="t">3. wait for the data plane's grace period</text>
+
+  <!-- ============ Shared memory ============ -->
+  <rect x="450" y="92" width="340" height="510" rx="12" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.5"/>
+  <text x="470" y="124" class="h">shared memory</text>
+  <text x="470" y="144" class="hs">one sealed memfd, mapped by both processes</text>
+
+  <rect x="470" y="160" width="145" height="78" rx="8" fill="#ffffff" stroke="#2f6fde" stroke-width="1.5"/>
+  <text x="542.5" y="188" class="tb" text-anchor="middle">Tables A</text>
+  <rect x="512.5" y="200" width="60" height="20" rx="10" fill="#1f9d55"/>
+  <text x="542.5" y="214" text-anchor="middle" style="font-size:11.5px;font-weight:600;fill:#ffffff">active</text>
+  <rect x="625" y="160" width="145" height="78" rx="8" fill="#ffffff" stroke="#2f6fde" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="697.5" y="188" class="tb" text-anchor="middle">Tables B</text>
+  <text x="697.5" y="214" class="s" text-anchor="middle">being rebuilt</text>
+  <text x="470" y="258" class="s">ports · VLANs · FDB · MDB · ARP · routes · SVIs</text>
+  <text x="470" y="274" class="s">314 KB per copy, written only by the control plane</text>
+
+  <rect x="470" y="288" width="300" height="58" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1.5"/>
+  <text x="484" y="311" class="tb">DataPlaneState</text>
+  <text x="484" y="332" class="s">counters · FDB hit bits · ack_seq · idle</text>
+
+  <text x="470" y="374" class="sec">SPSC RINGS · FULL RING = DROP AND COUNT</text>
+  <g>
+    <rect x="470" y="382" width="300" height="32" rx="6" fill="#ffffff" stroke="#e8590c"/>
+    <text x="484" y="403" class="t"><tspan class="tb">learn</tspan>  4,096  ·  DP → CP</text>
+    <rect x="470" y="420" width="300" height="32" rx="6" fill="#ffffff" stroke="#e8590c"/>
+    <text x="484" y="441" class="t"><tspan class="tb">punt</tspan>  256  ·  DP → CP</text>
+    <rect x="470" y="458" width="300" height="32" rx="6" fill="#ffffff" stroke="#e8590c"/>
+    <text x="484" y="479" class="t"><tspan class="tb">trace</tspan>  8,192, lossy  ·  DP → CP</text>
+    <rect x="470" y="496" width="300" height="32" rx="6" fill="#ffffff" stroke="#2f6fde"/>
+    <text x="484" y="517" class="t"><tspan class="tb">inject</tspan>  256  ·  CP → DP</text>
+    <!-- ring slots -->
+    <g fill="#fde3d3" stroke="#e8590c" stroke-width="0.8">
+      <rect x="690" y="390" width="10" height="16"/><rect x="702" y="390" width="10" height="16"/><rect x="714" y="390" width="10" height="16"/><rect x="726" y="390" width="10" height="16" fill="#ffffff"/><rect x="738" y="390" width="10" height="16" fill="#ffffff"/><rect x="750" y="390" width="10" height="16" fill="#ffffff"/>
+      <rect x="690" y="428" width="10" height="16"/><rect x="702" y="428" width="10" height="16" fill="#ffffff"/><rect x="714" y="428" width="10" height="16" fill="#ffffff"/><rect x="726" y="428" width="10" height="16" fill="#ffffff"/><rect x="738" y="428" width="10" height="16" fill="#ffffff"/><rect x="750" y="428" width="10" height="16" fill="#ffffff"/>
+      <rect x="690" y="466" width="10" height="16"/><rect x="702" y="466" width="10" height="16"/><rect x="714" y="466" width="10" height="16"/><rect x="726" y="466" width="10" height="16"/><rect x="738" y="466" width="10" height="16" fill="#ffffff"/><rect x="750" y="466" width="10" height="16" fill="#ffffff"/>
+    </g>
+    <g fill="#ffffff" stroke="#2f6fde" stroke-width="0.8">
+      <rect x="690" y="504" width="10" height="16" fill="#dbe7ff"/><rect x="702" y="504" width="10" height="16"/><rect x="714" y="504" width="10" height="16"/><rect x="726" y="504" width="10" height="16"/><rect x="738" y="504" width="10" height="16"/><rect x="750" y="504" width="10" height="16"/>
+    </g>
+  </g>
+  <text x="470" y="556" class="s">eventfds: <tspan class="tb" style="font-size:11.5px">notify</tspan> DP → CP, <tspan class="tb" style="font-size:11.5px">kick</tspan> CP → DP, non-blocking</text>
+  <text x="470" y="576" class="s">memfd + eventfds handed over once with SCM_RIGHTS</text>
+  <text x="470" y="592" class="s">on a SOCK_SEQPACKET Unix socket</text>
+
+  <!-- ============ Data plane ============ -->
+  <rect x="876" y="92" width="340" height="510" rx="12" fill="#fff6ef" stroke="#e8590c" stroke-width="1.5"/>
+  <text x="896" y="124" class="h" style="fill:#8a2c05">ss-dataplane</text>
+  <text x="896" y="144" class="hs">ss-forward: SCHED_FIFO 50 · pinned · mlocked</text>
+
+  <rect x="896" y="160" width="300" height="30" rx="6" fill="#ffffff" stroke="#f0b48f"/>
+  <text x="910" y="180" class="t"><tspan class="tb">RX</tspan>  ·  AF_PACKET TPACKET_V2 rings</text>
+  <line x1="1046" y1="191" x2="1046" y2="203" stroke="#e8590c" stroke-width="1.5" marker-end="url(#ao)"/>
+  <rect x="896" y="206" width="300" height="196" rx="8" fill="#ffffff" stroke="#e8590c"/>
+  <text x="910" y="228" class="tb">Pipeline::process</text>
+  <text x="1182" y="228" class="s" text-anchor="end">pure function</text>
+  <g class="s" style="fill:#1f2328">
+    <rect x="908" y="238" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="975" y="255.5" text-anchor="middle" style="font-size:12px">checksum fix-up</text>
+    <rect x="1050" y="238" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="1117" y="255.5" text-anchor="middle" style="font-size:12px">BPDU punt</text>
+    <rect x="908" y="270" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="975" y="287.5" text-anchor="middle" style="font-size:12px">802.1Q ingress</text>
+    <rect x="1050" y="270" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="1117" y="287.5" text-anchor="middle" style="font-size:12px">STP port state</text>
+    <rect x="908" y="302" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="975" y="319.5" text-anchor="middle" style="font-size:12px">source learning</text>
+    <rect x="1050" y="302" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="1117" y="319.5" text-anchor="middle" style="font-size:12px">L3 route · ARP</text>
+    <rect x="908" y="334" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="975" y="351.5" text-anchor="middle" style="font-size:12px">IGMP / MDB</text>
+    <rect x="1050" y="334" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="1117" y="351.5" text-anchor="middle" style="font-size:12px">unicast or flood</text>
+    <rect x="908" y="366" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="975" y="383.5" text-anchor="middle" style="font-size:12px">802.1Q egress</text>
+    <rect x="1050" y="366" width="134" height="26" rx="5" fill="#fff6ef" stroke="#f0b48f"/><text x="1117" y="383.5" text-anchor="middle" style="font-size:12px">trace sample</text>
+  </g>
+  <line x1="1046" y1="403" x2="1046" y2="415" stroke="#e8590c" stroke-width="1.5" marker-end="url(#ao)"/>
+  <rect x="896" y="418" width="300" height="30" rx="6" fill="#ffffff" stroke="#f0b48f"/>
+  <text x="910" y="438" class="t"><tspan class="tb">TX</tspan>  ·  one sendmmsg per port per batch</text>
+
+  <rect x="896" y="464" width="300" height="120" rx="8" fill="#ffffff" stroke="#e8590c" stroke-width="1.5"/>
+  <text x="910" y="488" class="tb" style="fill:#8a2c05">never waits for the control plane</text>
+  <text x="910" y="512" class="t">no locks · no malloc · no logging</text>
+  <text x="910" y="534" class="t">full ring → drop and count</text>
+  <text x="910" y="556" class="t">idle → poll() with a 1 ms timeout</text>
+  <text x="910" y="576" class="s">841 kpps no-drop, 5.7 µs p50 on a Pi 5</text>
+
+  <!-- Ports -->
+  <rect x="876" y="626" width="340" height="40" rx="8" fill="#eaeef2" stroke="#8c959f"/>
+  <text x="1046" y="651" class="tb" text-anchor="middle">switch ports  ·  veth or NIC</text>
+  <line x1="1006" y1="625" x2="1006" y2="605" stroke="#e8590c" stroke-width="2" marker-end="url(#ao)"/>
+  <text x="996" y="619" class="s" text-anchor="end">rx</text>
+  <line x1="1086" y1="604" x2="1086" y2="624" stroke="#e8590c" stroke-width="2" marker-end="url(#ao)"/>
+  <text x="1096" y="619" class="s">tx</text>
+
+  <!-- ============ Arrows between columns ============ -->
+  <!-- CP rebuilds the inactive copy and flips -->
+  <line x1="366" y1="199" x2="466" y2="199" stroke="#2f6fde" stroke-width="2.5" marker-end="url(#ab)"/>
+  <text x="416" y="190" class="lab" text-anchor="middle" style="fill:#2f6fde">publish</text>
+  <!-- DP reads the active copy -->
+  <line x1="772" y1="199" x2="872" y2="199" stroke="#57606a" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ag)"/>
+  <text x="822" y="190" class="lab" text-anchor="middle" style="fill:#57606a">read only</text>
+  <!-- DP writes counters and hit bits -->
+  <line x1="874" y1="317" x2="774" y2="317" stroke="#e8590c" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="824" y="308" class="lab" text-anchor="middle" style="fill:#e8590c">counters</text>
+  <!-- DP pushes learn / punt / trace -->
+  <line x1="874" y1="436" x2="774" y2="436" stroke="#e8590c" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="824" y="427" class="lab" text-anchor="middle" style="fill:#e8590c">events</text>
+  <!-- CP drains them -->
+  <line x1="468" y1="436" x2="368" y2="436" stroke="#57606a" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ag)"/>
+  <text x="418" y="427" class="lab" text-anchor="middle" style="fill:#57606a">drain</text>
+  <!-- CP queues packets to send -->
+  <line x1="366" y1="512" x2="466" y2="512" stroke="#2f6fde" stroke-width="2.5" marker-end="url(#ab)"/>
+  <text x="416" y="503" class="lab" text-anchor="middle" style="fill:#2f6fde">BPDU, ARP</text>
+  <!-- DP transmits them -->
+  <line x1="772" y1="512" x2="872" y2="512" stroke="#57606a" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ag)"/>
+  <text x="822" y="503" class="lab" text-anchor="middle" style="fill:#57606a">send</text>
+</svg>

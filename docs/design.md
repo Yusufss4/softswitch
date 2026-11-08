@@ -17,32 +17,10 @@ measurements). [benchmark.md](benchmark.md) has the numbers.
 
 ## The two processes
 
-```mermaid
-flowchart LR
-  subgraph CP["softswitchd (control plane, SCHED_OTHER)"]
-    loop["epoll loop<br/>timerfd · signalfd · eventfd"]
-    cli["CLI socket (sscli)"]
-    nl["rtnetlink link monitor"]
-    gui["HTTP + SSE (web GUI)"]
-    proto["RSTP · IGMP snooping · ARP/ICMP<br/>FDB with aging · startup config"]
-  end
-  subgraph SHM["memfd shared region (sealed, prefaulted)"]
-    tables["Tables copy A / copy B<br/>(written only by the CP)"]
-    dpstate["DataPlaneState<br/>(written only by the DP)"]
-    rings["SPSC rings<br/>learn · punt · trace (DP→CP)<br/>inject (CP→DP)"]
-  end
-  subgraph DP["ss-dataplane"]
-    fwd["ss-forward thread<br/>SCHED_FIFO 50, pinned, mlocked"]
-  end
-  CP -- "rebuild inactive copy, flip" --> tables
-  tables -- "read only" --> fwd
-  fwd -- "learn / punt / trace" --> rings
-  rings -- "inject (BPDUs, ARP, ICMP)" --> fwd
-  fwd -- "counters, hit bits, ack" --> dpstate
-  fwd -. "eventfd notify" .-> loop
-  loop -. "eventfd kick" .-> fwd
-  fwd <-- "AF_PACKET TPACKET_V2 rings" --> ports(("ports"))
-```
+![softswitch architecture](images/architecture.svg)
+
+Arrows are coloured by who writes: blue for the control plane, orange for the data plane. Dashed
+grey arrows only read.
 
 **Handshake.** At startup the control plane creates the region in a memfd. It seals the size
 (`F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_SEAL`), maps it with `MAP_POPULATE`, publishes a first
