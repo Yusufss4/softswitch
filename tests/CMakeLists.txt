@@ -20,6 +20,7 @@ add_executable(softswitch_tests
   pkt/test_ethernet.cpp
   pkt/test_igmp_bpdu.cpp
   pkt/test_ipv4_icmp_arp.cpp
+  shm/test_publish_modes.cpp
   shm/test_publisher.cpp
   shm/test_spsc_ring.cpp
   shm/test_tables.cpp
@@ -30,6 +31,7 @@ gtest_discover_tests(softswitch_tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS uni
 
 # Tests that make syscalls (memfd, sockets, fork) but need no privileges.
 add_executable(softswitch_runtime_tests
+  shm/test_lock_and_tx.cpp
   shm/test_region_ipc.cpp
 )
 target_link_libraries(softswitch_runtime_tests PRIVATE softswitch::runtime GTest::gtest_main)
