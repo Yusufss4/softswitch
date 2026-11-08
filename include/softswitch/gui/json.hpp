@@ -26,6 +26,8 @@ class JsonWriter {
   JsonWriter& value(int number) { return value(static_cast<std::int64_t>(number)); }
   JsonWriter& value(unsigned number) { return value(static_cast<std::uint64_t>(number)); }
   JsonWriter& value(bool flag);
+  /// Shortest representation that round-trips; NaN and infinities (not valid JSON) become null.
+  JsonWriter& value(double number);
   JsonWriter& null();
 
   /// Shorthand for key(name).value(v).

@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
+
 #include "softswitch/gui/json.hpp"
 
 namespace softswitch::gui {
@@ -42,6 +45,19 @@ TEST(JsonWriter, EmptyContainers) {
       .end_object()
       .end_object();
   EXPECT_EQ(w.str(), R"({"a":[],"o":{}})");
+}
+
+TEST(JsonWriter, Doubles) {
+  JsonWriter w;
+  w.begin_array()
+      .value(0.5)
+      .value(5.65685)
+      .value(-2.0)
+      .value(1e-7)
+      .value(std::nan(""))
+      .value(std::numeric_limits<double>::infinity());
+  w.end_array();
+  EXPECT_EQ(w.str(), "[0.5,5.65685,-2,1e-07,null,null]");
 }
 
 }  // namespace
