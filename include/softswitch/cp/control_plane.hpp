@@ -108,6 +108,7 @@ class ControlPlane {
   [[nodiscard]] std::string show_igmp() const;
   [[nodiscard]] std::string show_ip_interface() const;
   [[nodiscard]] std::string show_arp() const;
+  [[nodiscard]] std::string show_ip_route() const;
 
   EventLoop* loop_;
   ControlPlaneOptions options_;

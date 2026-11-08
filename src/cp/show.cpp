@@ -67,7 +67,7 @@ constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "show mac address-table [vlan ID] [interface PORT]\n"
     "show spanning-tree\n"
-    "show ip igmp snooping | show ip interface | show arp\n"
+    "show ip igmp snooping | show ip interface | show ip route | show arp\n"
     "clear arp\n"
     "clear mac address-table [dynamic] [vlan ID] [interface PORT]\n"
     "vlan ID [name NAME] | no vlan ID\n"
@@ -83,6 +83,7 @@ constexpr const char* kHelp =
     "interface PORT spanning-tree portfast | cost N | port-priority N\n"
     "[no] ip igmp snooping [vlan ID | querier | fast-leave] | ip igmp snooping query-interval N\n"
     "interface vlanN ip address A.B.C.D/N | interface vlanN no ip address | ip arp timeout N\n"
+    "[no] ip routing | [no] ip route A.B.C.D/N NEXTHOP\n"
     "trace sample N\n"
     "hostname NAME\n";
 
@@ -119,6 +120,9 @@ std::string ControlPlane::show(const std::vector<std::string>& t) const {
   }
   if (what == "ip" && t.size() > 2 && t[2] == "interface") {
     return show_ip_interface();
+  }
+  if (what == "ip" && t.size() > 2 && t[2] == "route") {
+    return show_ip_route();
   }
   if (what == "arp" || (what == "ip" && t.size() > 2 && t[2] == "arp")) {
     return show_arp();
@@ -315,6 +319,19 @@ std::string ControlPlane::show_ip_interface() const {
                    up ? "up" : "down (no such VLAN)", bridge_mac_.to_string()});
   }
   return table.empty() ? std::string("no IP interfaces\n") : table.render();
+}
+
+std::string ControlPlane::show_ip_route() const {
+  TextTable table({"Prefix", "Type", "Next hop", "Interface", "Status"});
+  for (const auto& r : router_.routes()) {
+    table.add_row({r.prefix.to_string(), r.connected ? "connected" : "static",
+                   r.connected ? std::string("-") : r.nexthop.to_string(),
+                   r.vlan != 0 ? "vlan" + std::to_string(r.vlan) : std::string("-"),
+                   r.active ? "active" : "inactive (next hop unreachable)"});
+  }
+  const std::string routing =
+      config_.ip_routing ? "IP routing is enabled\n" : "IP routing is disabled\n";
+  return routing + (table.empty() ? std::string("no routes\n") : table.render());
 }
 
 std::string ControlPlane::show_arp() const {
