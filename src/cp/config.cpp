@@ -522,12 +522,15 @@ CommandResult apply_config(SwitchConfig& c, const std::vector<std::string>& t) {
   return CommandResult::error("unknown command '" + t[0] + "'");
 }
 
-std::string render_running_config(const SwitchConfig& c) {
-  std::ostringstream out;
-  out << "! softswitch running configuration\n";
-  if (!c.hostname.empty()) {
-    out << "hostname " << c.hostname << "\n";
-  }
+namespace {
+
+// Each render_* helper below appends one section of the running configuration. A setting is
+// printed only when it differs from its default, as the command that would set it, so the output
+// replays through apply_config() into the same SwitchConfig.
+
+/// `vlan ID [name NAME]` for every VLAN except the built-in default VLAN 1. The name is left
+/// out when it is the automatic one (`VLAN<id>`).
+void render_vlans(std::ostream& out, const SwitchConfig& c) {
   for (const auto& [vid, vlan] : c.vlans) {
     if (vid == 1 && vlan.name == "default") {
       continue;
@@ -538,25 +541,29 @@ std::string render_running_config(const SwitchConfig& c) {
     }
     out << "\n";
   }
-  if (c.mac_aging_seconds != kDefaultMacAgingSeconds) {
-    out << "mac address-table aging-time " << c.mac_aging_seconds << "\n";
-  }
-  const SwitchConfig defaults_cfg;
+}
+
+/// The bridge-wide RSTP settings: on/off, bridge priority and the three protocol timers.
+void render_stp(std::ostream& out, const SwitchConfig& c, const SwitchConfig& defaults) {
   if (!c.stp_enabled) {
     out << "no spanning-tree\n";
   }
-  if (c.stp_priority != defaults_cfg.stp_priority) {
+  if (c.stp_priority != defaults.stp_priority) {
     out << "spanning-tree priority " << c.stp_priority << "\n";
   }
-  if (c.stp_hello != defaults_cfg.stp_hello) {
+  if (c.stp_hello != defaults.stp_hello) {
     out << "spanning-tree hello-time " << c.stp_hello << "\n";
   }
-  if (c.stp_max_age != defaults_cfg.stp_max_age) {
+  if (c.stp_max_age != defaults.stp_max_age) {
     out << "spanning-tree max-age " << c.stp_max_age << "\n";
   }
-  if (c.stp_forward_delay != defaults_cfg.stp_forward_delay) {
+  if (c.stp_forward_delay != defaults.stp_forward_delay) {
     out << "spanning-tree forward-time " << c.stp_forward_delay << "\n";
   }
+}
+
+/// IGMP snooping: global on/off, the VLANs it is disabled in, the querier and fast-leave.
+void render_igmp(std::ostream& out, const SwitchConfig& c, const SwitchConfig& defaults) {
   if (!c.igmp_snooping) {
     out << "no ip igmp snooping\n";
   }
@@ -566,13 +573,17 @@ std::string render_running_config(const SwitchConfig& c) {
   if (c.igmp_querier) {
     out << "ip igmp snooping querier\n";
   }
-  if (c.igmp_query_interval != defaults_cfg.igmp_query_interval) {
+  if (c.igmp_query_interval != defaults.igmp_query_interval) {
     out << "ip igmp snooping query-interval " << c.igmp_query_interval << "\n";
   }
   if (!c.igmp_fast_leave) {
     out << "no ip igmp snooping fast-leave\n";
   }
-  if (c.arp_timeout != defaults_cfg.arp_timeout) {
+}
+
+/// Layer 3: the ARP timeout, SVI addresses, whether routing is on, and the static routes.
+void render_l3(std::ostream& out, const SwitchConfig& c, const SwitchConfig& defaults) {
+  if (c.arp_timeout != defaults.arp_timeout) {
     out << "ip arp timeout " << c.arp_timeout << "\n";
   }
   for (const auto& [vid, prefix] : c.svis) {
@@ -584,6 +595,56 @@ std::string render_running_config(const SwitchConfig& c) {
   for (const auto& r : c.static_routes) {
     out << "ip route " << r.prefix.to_string() << " " << r.nexthop.to_string() << "\n";
   }
+}
+
+/// One port's settings, each as a one-line `interface NAME ...` command.
+void render_port(std::ostream& out, const PortConfig& p, const PortConfig& defaults) {
+  const std::string prefix = "interface " + p.name + " ";
+  if (!p.description.empty()) {
+    out << prefix << "description " << p.description << "\n";
+  }
+  if (p.mode == shm::PortMode::kTrunk) {
+    out << prefix << "switchport mode trunk\n";
+  }
+  if (p.access_vlan != defaults.access_vlan) {
+    out << prefix << "switchport access vlan " << p.access_vlan << "\n";
+  }
+  if (p.native_vlan != defaults.native_vlan) {
+    out << prefix << "switchport trunk native vlan " << p.native_vlan << "\n";
+  }
+  if (p.trunk_allowed != defaults.trunk_allowed) {
+    out << prefix << "switchport trunk allowed vlan " << format_vlan_list(p.trunk_allowed) << "\n";
+  }
+  if (p.stp_edge) {
+    out << prefix << "spanning-tree portfast\n";
+  }
+  if (p.stp_cost != defaults.stp_cost) {
+    out << prefix << "spanning-tree cost " << p.stp_cost << "\n";
+  }
+  if (p.stp_priority != defaults.stp_priority) {
+    out << prefix << "spanning-tree port-priority " << unsigned{p.stp_priority} << "\n";
+  }
+  if (p.shutdown) {
+    out << prefix << "shutdown\n";
+  }
+}
+
+}  // namespace
+
+std::string render_running_config(const SwitchConfig& c) {
+  const SwitchConfig defaults;
+  std::ostringstream out;
+  out << "! softswitch running configuration\n";
+  if (!c.hostname.empty()) {
+    out << "hostname " << c.hostname << "\n";
+  }
+  render_vlans(out, c);
+  if (c.mac_aging_seconds != kDefaultMacAgingSeconds) {
+    out << "mac address-table aging-time " << c.mac_aging_seconds << "\n";
+  }
+  render_stp(out, c, defaults);
+  render_igmp(out, c, defaults);
+  render_l3(out, c, defaults);
   for (const auto& m : c.static_macs) {
     out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "
         << m.port << "\n";
@@ -591,37 +652,9 @@ std::string render_running_config(const SwitchConfig& c) {
   if (c.trace_sample != 0) {
     out << "trace sample " << c.trace_sample << "\n";
   }
-  const PortConfig defaults;
+  const PortConfig port_defaults;
   for (const auto& p : c.ports) {
-    const std::string prefix = "interface " + p.name + " ";
-    if (!p.description.empty()) {
-      out << prefix << "description " << p.description << "\n";
-    }
-    if (p.mode == shm::PortMode::kTrunk) {
-      out << prefix << "switchport mode trunk\n";
-    }
-    if (p.access_vlan != defaults.access_vlan) {
-      out << prefix << "switchport access vlan " << p.access_vlan << "\n";
-    }
-    if (p.native_vlan != defaults.native_vlan) {
-      out << prefix << "switchport trunk native vlan " << p.native_vlan << "\n";
-    }
-    if (p.trunk_allowed != defaults.trunk_allowed) {
-      out << prefix << "switchport trunk allowed vlan " << format_vlan_list(p.trunk_allowed)
-          << "\n";
-    }
-    if (p.stp_edge) {
-      out << prefix << "spanning-tree portfast\n";
-    }
-    if (p.stp_cost != defaults.stp_cost) {
-      out << prefix << "spanning-tree cost " << p.stp_cost << "\n";
-    }
-    if (p.stp_priority != defaults.stp_priority) {
-      out << prefix << "spanning-tree port-priority " << unsigned{p.stp_priority} << "\n";
-    }
-    if (p.shutdown) {
-      out << prefix << "shutdown\n";
-    }
+    render_port(out, p, port_defaults);
   }
   return out.str();
 }
