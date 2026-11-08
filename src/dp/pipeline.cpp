@@ -298,7 +298,7 @@ bool Pipeline::is_own_address(const Tables& tables, Ipv4Address ip) noexcept {
 }
 
 void Pipeline::handle_router_frame(const Tables& tables, PortId in_port, const Classified& c,
-                                   Egress& /*egress*/) noexcept {
+                                   Egress& egress) noexcept {
   if (c.eth.ethertype == pkt::kEtherTypeArp) {
     (void)punt(tables, in_port, c, shm::PuntReason::kArp);  // e.g. replies to our requests
     return;
@@ -313,7 +313,51 @@ void Pipeline::handle_router_frame(const Tables& tables, PortId in_port, const C
     (void)punt(tables, in_port, c, shm::PuntReason::kToRouter);
     return;
   }
-  reject(tables, in_port, c, DropReason::kNoRoute);  // routing between SVIs: next PR
+  if ((tables.flags & shm::global_flag::kRoutingEnabled) == 0 || ip->dst.is_multicast() ||
+      ip->dst.is_broadcast()) {
+    reject(tables, in_port, c, DropReason::kNoRoute);
+    return;
+  }
+  if (ip->ttl <= 1) {
+    (void)punt(tables, in_port, c, shm::PuntReason::kTtlExpired);  // ICMP time exceeded
+    return;
+  }
+  const shm::RouteEntry* route = shm::route_lookup(tables, ip->dst);
+  if (route == nullptr) {
+    reject(tables, in_port, c, DropReason::kNoRoute);
+    return;
+  }
+  const Ipv4Address nexthop =
+      (route->flags & shm::route_flag::kConnected) != 0 ? ip->dst : route->nexthop;
+  const shm::NeighborSlot* neighbor = shm::neighbor_lookup(tables, nexthop);
+  if (neighbor == nullptr) {
+    (void)punt(tables, in_port, c, shm::PuntReason::kNeighborMiss);  // CP resolves and queues
+    return;
+  }
+
+  // Rewrite a private copy: next-hop MAC, router MAC, TTL - 1 (incremental checksum).
+  if (c.untagged.data() != scratch_.data()) {
+    std::memcpy(scratch_.data(), c.untagged.data(), c.untagged.size());
+  }
+  const std::span<std::uint8_t> frame(scratch_.data(), c.untagged.size());
+  neighbor->mac.write_to(frame.data());
+  tables.router_mac.write_to(frame.data() + 6);
+  (void)pkt::decrement_ttl(frame.subspan(c.eth.payload_offset));
+
+  // Layer 2 in the egress VLAN: the next hop's port if known, else flood that VLAN.
+  const VlanId out_vlan = neighbor->vlan;
+  const PortMask candidates = tables.vlans[out_vlan].members & forwarding_ports(tables);
+  PortMask out = candidates;
+  if (const shm::FdbSlot* slot = shm::fdb_lookup(tables, neighbor->mac, out_vlan);
+      slot != nullptr && has_port(candidates, slot->port)) {
+    out = port_bit(slot->port);
+  }
+  if (out == 0) {
+    reject(tables, in_port, c, DropReason::kNoEgress);
+    return;
+  }
+  emit_to(tables, out, out_vlan, frame, egress);
+  trace(tables, in_port, c, Decision::kRouted, DropReason::kNone, out, out_vlan);
 }
 
 bool Pipeline::snoop_multicast(const Tables& tables, PortId in_port, const Classified& c,
