@@ -299,6 +299,31 @@ CommandResult cmd_spanning_tree(SwitchConfig& c, const Tokens& t, bool negate) {
 
 // ip igmp snooping [vlan ID | querier | query-interval N | fast-leave]  (and the "no" forms)
 CommandResult cmd_ip(SwitchConfig& c, const Tokens& t, bool negate) {
+  if (t.size() == 2 && t[1] == "routing") {
+    c.ip_routing = !negate;
+    return CommandResult::success();
+  }
+  if (t.size() == 4 && t[1] == "route") {
+    auto prefix = Ipv4Prefix::parse(t[2]);
+    const auto nexthop = Ipv4Address::parse(t[3]);
+    if (!prefix || !nexthop) {
+      return CommandResult::error("usage: [no] ip route A.B.C.D/N NEXTHOP");
+    }
+    prefix->address = prefix->network();
+    const SwitchConfig::StaticRoute route{*prefix, *nexthop};
+    if (negate) {
+      return std::erase(c.static_routes, route) != 0 ? CommandResult::success()
+                                                     : CommandResult::unchanged();
+    }
+    if (std::find(c.static_routes.begin(), c.static_routes.end(), route) != c.static_routes.end()) {
+      return CommandResult::unchanged();
+    }
+    if (c.static_routes.size() >= 48) {
+      return CommandResult::error("too many static routes (max 48)");
+    }
+    c.static_routes.push_back(route);
+    return CommandResult::success();
+  }
   if (!negate && t.size() == 4 && t[1] == "arp" && t[2] == "timeout") {
     const auto secs = parse_uint(t[3], 86400);
     if (!secs || *secs < 10) {
@@ -552,6 +577,12 @@ std::string render_running_config(const SwitchConfig& c) {
   }
   for (const auto& [vid, prefix] : c.svis) {
     out << "interface vlan" << vid << " ip address " << prefix.to_string() << "\n";
+  }
+  if (!c.ip_routing) {
+    out << "no ip routing\n";
+  }
+  for (const auto& r : c.static_routes) {
+    out << "ip route " << r.prefix.to_string() << " " << r.nexthop.to_string() << "\n";
   }
   for (const auto& m : c.static_macs) {
     out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "

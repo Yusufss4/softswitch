@@ -160,6 +160,20 @@ TEST(ConfigCommands, SviAddresses) {
   EXPECT_EQ(c.arp_timeout, 60U);
 }
 
+TEST(ConfigCommands, RoutingAndStaticRoutes) {
+  auto c = sample();
+  EXPECT_TRUE(c.ip_routing);
+  EXPECT_TRUE(run(c, "no ip routing").ok);
+  EXPECT_FALSE(c.ip_routing);
+  EXPECT_TRUE(run(c, "ip route 192.168.50.7/24 10.0.20.24").ok);
+  ASSERT_EQ(c.static_routes.size(), 1U);
+  EXPECT_EQ(c.static_routes[0].prefix.to_string(), "192.168.50.0/24");  // normalised
+  EXPECT_FALSE(run(c, "ip route 192.168.50.0/24 10.0.20.24").changed);  // duplicate
+  EXPECT_FALSE(run(c, "ip route 192.168.50.0 10.0.20.24").ok);
+  EXPECT_TRUE(run(c, "no ip route 192.168.50.0/24 10.0.20.24").ok);
+  EXPECT_TRUE(c.static_routes.empty());
+}
+
 TEST(ConfigCommands, IsConfigCommand) {
   EXPECT_TRUE(is_config_command(tokenize("vlan 10")));
   EXPECT_TRUE(is_config_command(tokenize("no vlan 10")));

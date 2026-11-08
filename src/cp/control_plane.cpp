@@ -262,6 +262,10 @@ void ControlPlane::on_notify() {
       send_router_output(router_.on_arp(msg->vlan, frame, l3::Clock::now()));
     } else if (msg->reason == shm::PuntReason::kToRouter) {
       send_router_output(router_.on_to_router(msg->vlan, frame));
+    } else if (msg->reason == shm::PuntReason::kNeighborMiss) {
+      send_router_output(router_.on_neighbor_miss(msg->vlan, frame, l3::Clock::now()));
+    } else if (msg->reason == shm::PuntReason::kTtlExpired) {
+      send_router_output(router_.on_ttl_expired(msg->vlan, frame));
     }
     region_->punt.pop();
   }
@@ -500,6 +504,9 @@ void ControlPlane::sync_router() {
   l3::RouterConfig rc;
   rc.mac = bridge_mac_;
   rc.arp_timeout = std::chrono::seconds{config_.arp_timeout};
+  for (const auto& r : config_.static_routes) {
+    rc.static_routes.push_back(l3::StaticRoute{r.prefix, r.nexthop});
+  }
   for (const auto& [vid, prefix] : config_.svis) {
     if (config_.vlan_exists(vid)) {  // an SVI is only up while its VLAN exists
       rc.svis.push_back(l3::Svi{vid, prefix});
@@ -645,6 +652,16 @@ void ControlPlane::build_tables(shm::Tables& t) const {
   }
   for (const auto& [addr, n] : router_.neighbors()) {
     (void)shm::neighbor_insert(t, addr, n.mac, n.vlan);
+  }
+  if (config_.ip_routing && t.num_svis != 0) {
+    t.flags = static_cast<std::uint8_t>(t.flags | shm::global_flag::kRoutingEnabled);
+  }
+  for (const auto& r : router_.routes()) {
+    if (r.active) {
+      (void)shm::route_insert(
+          t, shm::RouteEntry{r.prefix, r.connected ? shm::route_flag::kConnected : std::uint8_t{0},
+                             r.vlan, r.nexthop});
+    }
   }
   for (const auto& [vid, vlan] : config_.vlans) {
     (void)vlan;

@@ -72,6 +72,13 @@ struct SwitchConfig {
   bool igmp_fast_leave = true;        ///< Immediate leave on portfast (host) ports.
   std::map<VlanId, Ipv4Prefix> svis;  ///< `interface vlanN ip address A.B.C.D/N`
   std::uint32_t arp_timeout = 300;
+  bool ip_routing = true;
+  struct StaticRoute {
+    Ipv4Prefix prefix;  ///< Stored in network form.
+    Ipv4Address nexthop;
+    friend bool operator==(const StaticRoute&, const StaticRoute&) = default;
+  };
+  std::vector<StaticRoute> static_routes;
 
   /// True if IGMP snooping is active in @p vlan.
   [[nodiscard]] bool snooping_in(VlanId vlan) const noexcept {
