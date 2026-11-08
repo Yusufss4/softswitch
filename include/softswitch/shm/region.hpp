@@ -24,7 +24,7 @@
 namespace softswitch::shm {
 
 inline constexpr std::uint64_t kRegionMagic = 0x3148435449575353ULL;  // "SSWITCH1"
-inline constexpr std::uint32_t kRegionVersion = 3;  ///< Bump on any layout change.
+inline constexpr std::uint32_t kRegionVersion = 4;  ///< Bump on any layout change.
 inline constexpr std::size_t kPacketDataLen = 1536;
 inline constexpr std::size_t kHitBits = 65536;  ///< FDB aging bitmap, indexed by fdb_hash.
 
@@ -90,6 +90,7 @@ enum class DropReason : std::uint8_t {
   kNoRoute,
   kPuntRingFull,
   kNoListeners,  ///< Snooped multicast with neither members nor mrouter ports.
+  kStackedTag,   ///< A second 802.1Q tag behind the first (Q-in-Q is not supported).
   kCount,
 };
 inline constexpr std::size_t kDropReasonCount = static_cast<std::size_t>(DropReason::kCount);

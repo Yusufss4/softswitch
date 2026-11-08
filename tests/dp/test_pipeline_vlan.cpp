@@ -110,6 +110,43 @@ TEST_F(PipelineVlanTest, PriorityTaggedFrameOnAccessIsAccepted) {
   EXPECT_EQ(h.egress.ports(), 0b0100U);
 }
 
+// Stacked 802.1Q tags (found by fuzz_pipeline): after the outer tag is classified and removed,
+// the frame must not still begin with a tag. Forwarding it would let the inner tag pick the
+// VLAN at the next switch: the double-tagging VLAN-hopping attack.
+std::vector<std::uint8_t> double_tagged(VlanId outer, VlanId inner) {
+  return FrameBuilder{}
+      .mac("ff:ff:ff:ff:ff:ff")
+      .mac("02:00:00:00:00:66")
+      .u16(pkt::kEtherTypeVlan)
+      .u16(pkt::make_tci(outer))
+      .u16(pkt::kEtherTypeVlan)
+      .u16(pkt::make_tci(inner))
+      .u16(pkt::kEtherTypeArp)
+      .zeros(46)
+      .build();
+}
+
+TEST_F(PipelineVlanTest, PriorityTagHidingAnInnerTagIsDropped) {
+  // Attacker on access VLAN 10 sends priority tag + VID 20, hoping p2 (native 10, untagged)
+  // forwards the inner VID 20 tag to the next switch.
+  h.receive(0, double_tagged(0, 20));
+  EXPECT_TRUE(h.egress.sent.empty());
+  EXPECT_EQ(h.drops(DropReason::kStackedTag), 1U);
+}
+
+TEST_F(PipelineVlanTest, OffloadedTagWithAnInnerTagIsDropped) {
+  // AF_PACKET moved the outer tag to metadata; the frame itself still starts with a tag.
+  h.receive(2, tagged(10), pkt::make_tci(20));
+  EXPECT_TRUE(h.egress.sent.empty());
+  EXPECT_EQ(h.drops(DropReason::kStackedTag), 1U);
+}
+
+TEST_F(PipelineVlanTest, StackedTagsOnATrunkAreDropped) {
+  h.receive(2, double_tagged(20, 10));
+  EXPECT_TRUE(h.egress.sent.empty());
+  EXPECT_EQ(h.drops(DropReason::kStackedTag), 1U);
+}
+
 TEST_F(PipelineVlanTest, VlanNotAllowedOnTrunkIsDropped) {
   h.receive(3, tagged(10));  // p3 only carries VLAN 20
   EXPECT_TRUE(h.egress.sent.empty());

@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Frames with stacked 802.1Q tags are dropped (new drop reason `stacked-tag`). A host on an
+  access port could send a priority tag (VID 0) with a second tag behind it; the switch removed
+  the first and forwarded the frame with the inner tag still in front, so out of an untagged
+  (native) trunk port the next switch classified it by that tag: double-tagging VLAN hopping.
+  Found by `fuzz_pipeline`; the input is kept in `fuzz/corpus/pipeline/`. Region layout version 4.
+
 ### Fixed
 - The data plane spun at 100 % CPU after any of its links went down: the link loss leaves an
   error pending on the port's AF_PACKET socket, poll() reported POLLERR until it was read, and
