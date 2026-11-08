@@ -38,6 +38,10 @@ class PortIo {
   /// Kicks the kernel to send everything queued since the last flush.
   virtual void tx_flush() noexcept = 0;
   [[nodiscard]] virtual std::uint64_t tx_ring_full() const noexcept = 0;
+  /// Reads and so clears a pending socket error (e.g. ENETDOWN after the link went down). Call
+  /// it when poll() reports POLLERR for poll_fd(): until the error is read, poll() keeps
+  /// returning at once and the caller would never sleep.
+  virtual void clear_error() noexcept {}
   /// Cumulative frames dropped by the kernel before reaching the RX ring. May cost a syscall,
   /// so callers sample it rather than calling it per batch.
   [[nodiscard]] virtual std::uint64_t rx_kernel_drops() noexcept { return 0; }

@@ -25,4 +25,14 @@ sleep 0.5
 expect_eq "$(oper_of sw2 s2p2)" "up" "sw2 sees carrier back"
 expect_ping h1 h3
 
+# Regression: the link loss leaves an error pending on the port's AF_PACKET socket, and poll()
+# reports POLLERR until it is read. The data plane used to never read it, so its idle poll()
+# returned at once forever: 100 % CPU at SCHED_FIFO, starving any other data plane on that CPU.
+busy=$(forward_busy sw1)
+if ((busy >= 0 && busy < 20)); then
+  pass "sw1's forwarding thread is idle again after the flap (${busy}% CPU)"
+else
+  fail "sw1's forwarding thread is spinning after the flap (${busy}% CPU)"
+fi
+
 finish

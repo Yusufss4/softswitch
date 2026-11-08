@@ -156,6 +156,12 @@ std::uint64_t AfPacketPort::rx_kernel_drops() noexcept {
   return rx_kernel_drops_;
 }
 
+void AfPacketPort::clear_error() noexcept {
+  int error = 0;
+  socklen_t len = sizeof(error);
+  (void)::getsockopt(rx_fd_.get(), SOL_SOCKET, SO_ERROR, &error, &len);  // reading clears it
+}
+
 bool AfPacketPort::rx_ready() const noexcept {
   return (load_status(header(rx_.frame(rx_.next))) & TP_STATUS_USER) != 0;
 }

@@ -213,6 +213,14 @@ void DataPlane::forward_loop() noexcept {
       if ((pfds[pfds.size() - 2].revents & POLLIN) != 0) {
         (void)sys::eventfd_drain(kick_fd_.get());
       }
+      // A link that went down leaves an error pending on its socket, and poll() reports
+      // POLLERR until it is read: without this the thread would spin at 100 % and, at
+      // SCHED_FIFO, starve any other data plane pinned to the same CPU.
+      for (std::size_t p = 0; p < ports_.size(); ++p) {
+        if ((pfds[p].revents & POLLERR) != 0) {
+          ports_[p]->clear_error();
+        }
+      }
       const std::uint64_t now = sys::monotonic_ns();
       dp.heartbeat_ns.store(now, std::memory_order_relaxed);
       sample_kernel_drops(now);
