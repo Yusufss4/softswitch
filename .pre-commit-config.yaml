@@ -1,3 +1,5 @@
+# Fuzz seeds are raw binary inputs: whitespace and end-of-file fixers would corrupt them.
+exclude: ^fuzz/corpus/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

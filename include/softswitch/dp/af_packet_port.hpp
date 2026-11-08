@@ -57,6 +57,7 @@ class AfPacketPort final : public PortIo {
   void tx_flush() noexcept override;
   [[nodiscard]] std::uint64_t tx_ring_full() const noexcept override { return tx_ring_full_; }
   [[nodiscard]] std::uint64_t rx_kernel_drops() noexcept override;
+  void clear_error() noexcept override;
 
   [[nodiscard]] int ifindex() const noexcept { return ifindex_; }
 

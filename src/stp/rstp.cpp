@@ -330,12 +330,15 @@ void Rstp::set_state(PortId p, State state, Clock::time_point now) {
 }
 
 void Rstp::topology_change(PortId origin, bool detected_here, Clock::time_point now) {
-  // A received TC repeats in every BPDU for 2 x hello; act on it once per window.
-  if (!detected_here && last_tc_ && now < *last_tc_ + (2 * config_.hello_time)) {
-    return;
+  // A received TC repeats in every BPDU for 2 x hello, so count it once per window. But flush
+  // and propagate on every one, as the 802.1D-2004 Topology Change machine does: during a
+  // multi-step reconvergence a second, unrelated change can arrive inside the window, and
+  // ignoring it leaves MACs pointing into a dead end until the next change.
+  const bool repeat = !detected_here && last_tc_ && now < *last_tc_ + (2 * config_.hello_time);
+  if (!repeat) {
+    ++topology_changes_;
+    last_tc_ = now;
   }
-  ++topology_changes_;
-  last_tc_ = now;
   if (callbacks_.flush) {
     callbacks_.flush(origin);
   }

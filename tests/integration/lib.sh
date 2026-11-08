@@ -93,6 +93,22 @@ expect_eq() {
   if [[ "$1" == "$2" ]]; then pass "$3"; else fail "$3 (got '$1', want '$2')"; fi
 }
 
+# forward_busy SW: percent of one CPU that SW's ss-forward thread used over the next second.
+# An idle switch sleeps in poll() and stays near 0; a spinning one shows ~100.
+forward_busy() {
+  local pid tid t1 t2
+  for pid in $(pgrep -x ss-dataplane); do
+    tr '\0' ' ' <"/proc/$pid/cmdline" | grep -qE -- "--name $1( |$)" && break
+    pid=""
+  done
+  [[ -n "$pid" ]] || { echo "-1"; return; }
+  tid=$(ps -L -o tid=,comm= -p "$pid" | awk '$2=="ss-forward"{print $1}')
+  t1=$(awk '{print $14 + $15}' "/proc/$pid/task/$tid/stat")
+  sleep 1
+  t2=$(awk '{print $14 + $15}' "/proc/$pid/task/$tid/stat")
+  echo $(((t2 - t1) * 100 / $(getconf CLK_TCK)))
+}
+
 finish() {
   if [[ $FAILURES -ne 0 ]]; then
     log "$FAILURES assertion(s) failed"

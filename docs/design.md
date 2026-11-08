@@ -82,7 +82,7 @@ loop:
 `Pipeline::process` runs these steps in order:
 1. Complete offloaded checksums.
 2. Punt BPDUs.
-3. 802.1Q ingress: the tag is restored from `tp_vlan_tci`, because veth and AF_PACKET strip it. Then PVID, acceptable frame types and membership.
+3. 802.1Q ingress: the tag is restored from `tp_vlan_tci`, because veth and AF_PACKET strip it. Then PVID, acceptable frame types and membership. A frame with a second tag behind the first is dropped (`stacked-tag`): there is no Q-in-Q, and forwarding it would let the inner tag choose the VLAN at the next switch.
 4. Drop reserved multicast.
 5. STP port state: discarding drops; learning learns but doesn't forward.
 6. Source learning, with a small repeat cache so one new MAC queues one learn event, not one per packet.

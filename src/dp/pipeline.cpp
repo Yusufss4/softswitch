@@ -118,6 +118,13 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
     }
   }
   c.eth = *eth;
+  // One tag has been classified and removed (in-band or by the kernel). If another follows,
+  // forwarding the frame would hand that inner tag to the next switch, which would classify
+  // the frame by it: the double-tagging VLAN-hopping attack. Q-in-Q is not supported.
+  if (c.eth.tagged) {
+    reject(tables, in_port, c, DropReason::kStackedTag);
+    return;
+  }
 
   // ---- finish offloaded TCP/UDP checksums (works on the private copy) -----------------------
   if (frame.checksum_incomplete && c.eth.ethertype == pkt::kEtherTypeIpv4) {

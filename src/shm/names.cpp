@@ -32,6 +32,8 @@ const char* to_string(DropReason reason) noexcept {
       return "untagged-not-allowed";
     case DropReason::kTaggedOnAccess:
       return "tagged-on-access";
+    case DropReason::kStackedTag:
+      return "stacked-tag";
     case DropReason::kVlanNotMember:
       return "vlan-not-member";
     case DropReason::kStpBlocked:
