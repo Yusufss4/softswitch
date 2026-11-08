@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ss-pktgen` and `ss-sink`: AF_PACKET traffic generator and sink with sequence numbers and
+  one-way latency (exact percentiles, log-spaced histogram CSV).
+- `scripts/bench.sh`: one-switch benchmark with an RFC 2544-style no-drop-rate search, a
+  saturation sweep (64/512/1500-byte frames), latency at fixed rates, the Linux bridge as a
+  baseline, and loss attributed to the switch or the sink. `scripts/bench_report.py` renders the
+  tables and a latency-tail (CCDF) chart.
+- `scripts/perf.sh`: `perf stat` and `perf record` of the `ss-forward` thread under load, with an
+  in-repo flame graph renderer (`scripts/flamegraph.py`).
+- `sendmmsg` TX mode: linear copies staged per batch and sent with one syscall per port.
+- Per-port kernel RX-ring drop counter (`PACKET_STATISTICS`), shown in `show counters` and the
+  GUI API.
+- Priority-inversion demo: `softswitchd --publish-mode qsbr|mutex|mutex-pi` and `--publish-hz`,
+  `ss-hog` (periodic SCHED_FIFO CPU hog), `scripts/inversion.sh`, and lock-wait counters in
+  `show dataplane`.
+- `docs/design.md` (control vs data path, table ownership, threading, priority inversion) and
+  `docs/benchmark.md` (throughput, latency, perf profile, the `sendmmsg` optimisation).
+
+### Changed
+- `ss-dataplane` now defaults to `--tx-mode sendmmsg`: 841 kpps no-drop rate for 64-byte frames
+  on a Pi 5, up from 652 kpps with the TX ring (+29 %), at 22 % fewer cycles per packet.
+  `--tx-mode` rejects unknown values instead of falling back to the ring.
+- Shared region layout version 3: control and data plane binaries must be from the same build.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added

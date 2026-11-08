@@ -1,0 +1,45 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 24K of event 'cycles:P'
+# Event count (approx.): 11468435844
+#
+# Overhead  Symbol                                                                                                                                                                                                                  IPC   [IPC Coverage]
+# ........  ......................................................................................................................................................................................................................  ....................
+#
+     9.83%  [k] __packet_get_status                                                                                                                                                                                                 -      -
+     6.31%  [.] softswitch::dp::AfPacketPort::tx(std::span<unsigned char const, 18446744073709551615ul>, std::optional<unsigned short>)                                                                                             -      -
+     4.45%  [k] skb_copy_ubufs                                                                                                                                                                                                      -      -
+     4.42%  [k] tpacket_rcv                                                                                                                                                                                                         -      -
+     3.30%  [k] _raw_spin_unlock_irqrestore                                                                                                                                                                                         -      -
+     3.26%  [.] softswitch::MacAddress::from_bytes(unsigned char const*)                                                                                                                                                            -      -
+     3.21%  [k] packet_sendmsg                                                                                                                                                                                                      -      -
+     2.26%  [k] __update_cpu_freelist_fast                                                                                                                                                                                          -      -
+     2.14%  [k] sock_def_readable                                                                                                                                                                                                   -      -
+     2.12%  [k] handle_softirqs                                                                                                                                                                                                     -      -
+     1.90%  [k] __netif_receive_skb_core.constprop.0                                                                                                                                                                                -      -
+     1.85%  [k] __alloc_pages_noprof                                                                                                                                                                                                -      -
+     1.75%  [k] memmove                                                                                                                                                                                                             -      -
+     1.71%  [k] arch_counter_get_cntpct                                                                                                                                                                                             -      -
+     1.58%  [.] softswitch::dp::Pipeline::process(softswitch::shm::Tables const&, unsigned short, softswitch::dp::RxFrame const&, softswitch::dp::Egress&)                                                                          -      -
+     1.53%  [k] get_page_from_freelist                                                                                                                                                                                              -      -
+     1.50%  [k] __skb_flow_dissect                                                                                                                                                                                                  -      -
+     1.50%  [k] _raw_spin_unlock_irq                                                                                                                                                                                                -      -
+     1.41%  [k] kmem_cache_alloc_node_noprof                                                                                                                                                                                        -      -
+     1.39%  [.] softswitch::shm::fdb_lookup(softswitch::shm::Tables const&, softswitch::MacAddress const&, unsigned short)                                                                                                          -      -
+     1.39%  [k] sock_wfree                                                                                                                                                                                                          -      -
+     1.32%  [k] flush_dcache_page                                                                                                                                                                                                   -      -
+     1.30%  [k] tcf_action_exec                                                                                                                                                                                                     -      -
+     1.29%  [k] do_softirq                                                                                                                                                                                                          -      -
+     1.27%  [k] tcf_gact_act                                                                                                                                                                                                        -      -
+     1.26%  [k] kmem_cache_free                                                                                                                                                                                                     -      -
+     1.23%  [k] skb_copy_bits                                                                                                                                                                                                       -      -
+     1.21%  [.] softswitch::dp::AfPacketPort::rx_burst(std::span<softswitch::dp::RxFrame, 18446744073709551615ul>)                                                                                                                  -      -
+     1.21%  [k] alloc_pages_mpol_noprof                                                                                                                                                                                             -      -
+     1.14%  [k] flush_dcache_folio                                                                                                                                                                                                  -      -
+     1.14%  [k] veth_xmit                                                                                                                                                                                                           -      -
+     1.13%  [k] sk_skb_reason_drop                                                                                                                                                                                                  -      -
+     1.06%  [k] net_rx_action                                                                                                                                                                                                       -      -
+     0.99%  [k] _raw_spin_lock                                                                                                                                                                                                      -      -

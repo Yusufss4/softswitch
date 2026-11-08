@@ -12,18 +12,28 @@ like the software stack on a Marvell or Broadcom switch: a **control plane** own
 configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
 packets using tables the control plane publishes through shared memory.
 
-> **Status:** M6 done (web GUI): 802.1Q VLANs, MAC learning/aging, Rapid Spanning Tree, IGMP snooping and inter-VLAN routing with ARP/ICMP, on the split control/data plane. See the
-> [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
+**On a Raspberry Pi 5:**
+- **841 kpps** forwarded without loss with 64-byte frames, **6.7 Gb/s** with 1500-byte frames;
+- **5.7 µs** median and **7.5 µs** p99.9 one-way latency at 100 kpps;
+- the forwarding thread **never waits for the control plane**. With a real-time CPU hog on the
+  control plane's CPU, a lock-based design stalls forwarding for 13 ms, and this one doesn't.
 
-## Planned features
-- 802.1Q VLANs: tag insert/strip, access/trunk ports, ingress/egress filtering
-- MAC learning, flooding and aging (FDB)
-- Rapid Spanning Tree (reduced RSTP), verified across three switches
-- IGMP snooping, so multicast isn't flooded
-- L3: ARP, ICMP, and routing between two VLAN interfaces, plus static routes
-- Control plane: CLI and rtnetlink. Data plane: AF_PACKET (TPACKET_V3), SCHED_FIFO, lock-free IPC
-- A read-only web GUI that shows live forwarding decisions
-- Benchmarks: packets per second, a latency histogram and perf profiles
+See [the benchmark](docs/benchmark.md) and [the design note](docs/design.md).
+
+## Features
+- **802.1Q VLANs:** tag insert and strip, access and trunk ports, native VLAN, ingress and egress filtering
+- **MAC learning, flooding and aging.** The data plane sets hit bits, and the control plane ages entries
+- **Rapid Spanning Tree** (reduced RSTP): proposal/agreement handshakes, failover in under a second across three switches
+- **IGMP snooping** with querier and mrouter ports, so multicast reaches only members
+- **L3:** SVIs, ARP, ICMP echo, routing between VLANs and static routes
+- **Control plane:** startup config in CLI syntax, `sscli`, rtnetlink link monitoring, all in one epoll loop
+- **Data plane:**
+  - AF_PACKET TPACKET_V2 rings and `sendmmsg` batching;
+  - a SCHED_FIFO forwarding thread, pinned and memory-locked;
+  - no locks, allocation or logging on the forward path.
+- **IPC:** a sealed memfd with double-buffered tables published lock-free (QSBR), SPSC rings, and eventfds
+- **Web GUI:** live forwarding decisions on a topology view
+- **Tooling:** `ss-pktgen`, `ss-sink` and `ss-hog`, plus scripts for the benchmark, the `perf` flame graphs and the priority-inversion demo
 
 ## Try it
 
@@ -36,6 +46,21 @@ packets using tables the control plane publishes through shared memory.
     build/release/sscli -s sw1                            # interactive CLI
     # browse http://<pi>:8081/ for the live view
     scripts/switches.sh stop && scripts/topo.sh down
+
+## Architecture
+
+```
+ softswitchd (control plane, SCHED_OTHER)          ss-dataplane (ss-forward: SCHED_FIFO 50, pinned)
+ ┌──────────────────────────────────────┐           ┌──────────────────────────────────────┐
+ │ epoll loop: CLI · rtnetlink · GUI    │  memfd    │ RX rings ─▶ Pipeline::process ─▶ TX  │
+ │ RSTP · IGMP · ARP/ICMP · FDB aging   │══════════▶│ reads tables[active] only            │
+ │ rebuilds tables[!active], flips      │ rings +   │ learn/punt/trace ─▶ rings, never     │
+ │ waits for the DP's grace period      │◀══════════│ blocks, never takes a lock           │
+ └──────────────────────────────────────┘ eventfds  └──────────────────────────────────────┘
+```
+
+The [design note](docs/design.md) covers the control path and the data path, table ownership,
+threading, and the priority inversion this design avoids, with measurements.
 
 ## Web GUI
 
@@ -74,9 +99,22 @@ Every pull request runs:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for running these locally.
 
+## Benchmark
+
+```sh
+scripts/bench.sh            # pps sweep, no-drop rate, latency histograms
+scripts/perf.sh             # perf stat + flame graph of the forwarding thread
+scripts/inversion.sh        # QSBR vs mutex vs mutex+PI under a real-time CPU hog
+```
+
+Results and analysis are in [docs/benchmark.md](docs/benchmark.md). One result: the TX ring
+looked like the zero-copy fast path, but profiling showed it costs a page allocation and a copy
+per packet on veth. Switching to batched `sendmmsg` raised the no-drop rate by 29%.
+
 ## Documentation
+- [Design note](docs/design.md): control path vs data path, table ownership, threading, priority inversion
+- [Benchmark](docs/benchmark.md): throughput, latency, perf profile, the `sendmmsg` optimisation
 - API reference: <https://yusufss4.github.io/softswitch/> (published with each release)
-- Design notes: `docs/design.md` (arrives with M1)
 
 ## License
 [MIT](LICENSE)
