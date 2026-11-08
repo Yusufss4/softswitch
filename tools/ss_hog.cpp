@@ -15,6 +15,7 @@
 #include <thread>
 
 #include "softswitch/common/args.hpp"
+#include "softswitch/gui/json.hpp"
 #include "softswitch/sys/realtime.hpp"
 
 namespace {
@@ -71,9 +72,15 @@ int run(std::span<char*> args) {
       std::this_thread::sleep_for(std::chrono::nanoseconds{start + period_ns - now});
     }
   }
-  std::cout << "{\"periods\":" << periods << ",\"busy_ms\":" << busy_ms
-            << ",\"period_ms\":" << period_ms << ",\"priority\":" << priority << ",\"cpu\":" << cpu
-            << "}\n";
+  gui::JsonWriter json;
+  json.begin_object()
+      .field("periods", periods)
+      .field("busy_ms", busy_ms)
+      .field("period_ms", period_ms)
+      .field("priority", priority)
+      .field("cpu", cpu)
+      .end_object();
+  std::cout << json.str() << "\n";
   return 0;
 }
 

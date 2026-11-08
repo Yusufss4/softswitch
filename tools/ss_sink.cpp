@@ -17,6 +17,7 @@
 
 #include "softswitch/common/args.hpp"
 #include "softswitch/dp/af_packet_port.hpp"
+#include "softswitch/gui/json.hpp"
 #include "softswitch/pkt/bytes.hpp"
 #include "softswitch/sys/realtime.hpp"
 
@@ -90,20 +91,27 @@ int run(std::span<char*> args) {
   double mean = 0;
   for (const auto v : latency) mean += v;
   mean = latency.empty() ? 0 : mean / static_cast<double>(latency.size()) / 1000.0;
-  std::cout << "{\"received\":" << received << ",\"expected\":" << (received ? max_seq + 1 : 0)
-            << ",\"sink_ring_drops\":" << port.rx_kernel_drops() << ",\"pps\":"
-            << (secs > 0 ? static_cast<std::uint64_t>(static_cast<double>(received) / secs) : 0)
-            << ",\"lat_us\":{\"min\":" << percentile(latency, 0.0) << ",\"mean\":" << mean
-            << ",\"p50\":" << percentile(latency, 0.50) << ",\"p90\":" << percentile(latency, 0.90)
-            << ",\"p99\":" << percentile(latency, 0.99)
-            << ",\"p999\":" << percentile(latency, 0.999)
-            << ",\"max\":" << (latency.empty() ? 0 : latency.back() / 1000.0) << "}";
-
+  gui::JsonWriter json;
+  json.begin_object()
+      .field("received", received)
+      .field("expected", received != 0 ? max_seq + 1 : std::uint64_t{0})
+      .field("sink_ring_drops", port.rx_kernel_drops())
+      .field("pps", secs > 0 ? static_cast<std::uint64_t>(static_cast<double>(received) / secs)
+                             : std::uint64_t{0});
+  json.key("lat_us")
+      .begin_object()
+      .field("min", percentile(latency, 0.0))
+      .field("mean", mean)
+      .field("p50", percentile(latency, 0.50))
+      .field("p90", percentile(latency, 0.90))
+      .field("p99", percentile(latency, 0.99))
+      .field("p999", percentile(latency, 0.999))
+      .field("max", latency.empty() ? 0.0 : latency.back() / 1000.0)
+      .end_object();
   // Log-spaced buckets: 8 per power of two, from 1 us to ~16 s; empty buckets are left out.
   // Part of the JSON rather than a file, so the tool never opens a path it was given.
-  std::cout << R"(,"hist":[)";
+  json.key("hist").begin_array();
   std::size_t idx = 0;
-  bool first = true;
   for (int b = 0; b < 8 * 24; ++b) {
     const double upper_us = std::pow(2.0, b / 8.0);
     std::uint64_t count = 0;
@@ -112,11 +120,11 @@ int run(std::span<char*> args) {
       ++idx;
     }
     if (count != 0) {
-      std::cout << (first ? "" : ",") << "[" << upper_us << "," << count << "]";
-      first = false;
+      json.begin_array().value(upper_us).value(count).end_array();
     }
   }
-  std::cout << "]}\n";
+  json.end_array().end_object();
+  std::cout << json.str() << "\n";
   return 0;
 }
 

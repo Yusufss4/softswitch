@@ -12,13 +12,17 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
 #include "softswitch/common/args.hpp"
 #include "softswitch/dp/af_packet_port.hpp"
+#include "softswitch/gui/json.hpp"
 #include "softswitch/pkt/bytes.hpp"
 #include "softswitch/pkt/ethernet.hpp"
 #include "softswitch/pkt/ipv4.hpp"
@@ -31,12 +35,21 @@ using namespace softswitch;
 constexpr std::uint32_t kMagic = 0x53535747;  // "SSWG"
 constexpr std::size_t kPayloadAt = 14 + 20 + 8;
 
+/// The value of a parsed option, or a clear error instead of dereferencing an empty optional.
+template <typename T>
+T must(std::optional<T> value, std::string_view what) {
+  if (!value) {
+    throw std::invalid_argument("invalid " + std::string(what));
+  }
+  return *value;
+}
+
 struct Options {
   std::string iface;
-  MacAddress dst;
-  MacAddress src = *MacAddress::parse("02:00:00:00:be:01");
-  Ipv4Address src_ip = *Ipv4Address::parse("10.99.0.1");
-  Ipv4Address dst_ip = *Ipv4Address::parse("10.99.0.2");
+  std::optional<MacAddress> dst;
+  MacAddress src = must(MacAddress::parse("02:00:00:00:be:01"), "source MAC");
+  Ipv4Address src_ip = must(Ipv4Address::parse("10.99.0.1"), "source IP");
+  Ipv4Address dst_ip = must(Ipv4Address::parse("10.99.0.2"), "destination IP");
   std::size_t size = 64;  ///< Frame size including the 4-byte FCS the wire would add.
   std::uint64_t rate = 0;
   double duration = 5.0;
@@ -44,10 +57,10 @@ struct Options {
   int cpu = -1;
 };
 
-std::vector<std::uint8_t> build_template(const Options& o) {
+std::vector<std::uint8_t> build_template(const Options& o, const MacAddress& dst) {
   const std::size_t len = std::max<std::size_t>(o.size, 64) - 4;  // FCS is added by the "wire"
   std::vector<std::uint8_t> f(len, 0);
-  pkt::write_eth_header(f, o.dst, o.src, pkt::kEtherTypeIpv4);
+  pkt::write_eth_header(f, dst, o.src, pkt::kEtherTypeIpv4);
   pkt::Ipv4Header h;
   h.total_len = static_cast<std::uint16_t>(len - 14);
   h.ttl = 64;
@@ -72,9 +85,9 @@ int run(std::span<char*> args) {
     if (a == "--iface")
       o.iface = reader.value(a);
     else if (a == "--dst-mac")
-      o.dst = *MacAddress::parse(reader.value(a));
+      o.dst = must(MacAddress::parse(reader.value(a)), "--dst-mac");
     else if (a == "--src-mac")
-      o.src = *MacAddress::parse(reader.value(a));
+      o.src = must(MacAddress::parse(reader.value(a)), "--src-mac");
     else if (a == "--size")
       o.size = std::stoul(reader.value(a));
     else if (a == "--rate")
@@ -92,8 +105,8 @@ int run(std::span<char*> args) {
       return 2;
     }
   }
-  if (o.iface.empty() || o.size < 64 || o.size > 1518) {
-    std::cerr << "ss-pktgen: need --iface and a --size of 64..1518\n";
+  if (o.iface.empty() || !o.dst || o.size < 64 || o.size > 1518) {
+    std::cerr << "ss-pktgen: need --iface, --dst-mac and a --size of 64..1518\n";
     return 2;
   }
   if (o.cpu >= 0) {
@@ -105,7 +118,7 @@ int run(std::span<char*> args) {
   po.rx_frames = 64;
   dp::AfPacketPort port(po);
 
-  auto frame = build_template(o);
+  auto frame = build_template(o, *o.dst);
   const auto start = sys::monotonic_ns();
   const auto end = start + static_cast<std::uint64_t>(o.duration * 1e9);
   const std::uint64_t interval_ns = o.rate == 0 ? 0 : 1'000'000'000ULL / o.rate;
@@ -145,9 +158,15 @@ int run(std::span<char*> args) {
     next_due += interval_ns * burst;
   }
   const double secs = static_cast<double>(sys::monotonic_ns() - start) / 1e9;
-  std::cout << "{\"sent\":" << seq << ",\"seconds\":" << secs
-            << ",\"pps\":" << static_cast<std::uint64_t>(static_cast<double>(seq) / secs)
-            << ",\"size\":" << o.size << ",\"ring_full\":" << full << "}\n";
+  gui::JsonWriter json;
+  json.begin_object()
+      .field("sent", seq)
+      .field("seconds", secs)
+      .field("pps", static_cast<std::uint64_t>(static_cast<double>(seq) / secs))
+      .field("size", static_cast<std::uint64_t>(o.size))
+      .field("ring_full", full)
+      .end_object();
+  std::cout << json.str() << "\n";
   return 0;
 }
 
