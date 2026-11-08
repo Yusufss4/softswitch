@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Starts or stops softswitchd + ss-dataplane for every switch in the test topology.
 # Usage: scripts/switches.sh start [sw1 sw2 ...] | stop | status
-# Env: SOFTSWITCH_BIN_DIR (default build/release), RUN_DIR (default /tmp/softswitch),
+# Env: TOPOLOGY (unset: 3 switches; large: 8 switches), SOFTSWITCH_BIN_DIR (default build/release),
+#      RUN_DIR (default /tmp/softswitch),
 #      DP_ARGS (extra ss-dataplane arguments), CP_ARGS (extra softswitchd arguments).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -14,7 +15,7 @@ start_one() {
   local cpu=$(((index + 1) % ncpu))
   mkdir -p "$RUN_DIR"
   local config_args=()
-  [[ -f "configs/$sw.conf" ]] && config_args=(--config "configs/$sw.conf")
+  [[ -f "$CONFIG_DIR/$sw.conf" ]] && config_args=(--config "$CONFIG_DIR/$sw.conf")
   # Web GUI on 8081, 8082, ... (HTTP_BASE_PORT); 0 disables it.
   local http_args=()
   [[ "${HTTP_BASE_PORT:-8081}" != "0" ]] && http_args=(--http-port "$((${HTTP_BASE_PORT:-8081} + index))")

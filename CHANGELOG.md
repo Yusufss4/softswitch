@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- An 8-switch demo topology, a ring with two chords (`TOPOLOGY=large` for `scripts/topo.sh`
+  and `scripts/switches.sh`, configs in `configs/large/`), and `test_large`: three loops for RSTP,
+  two data planes per CPU, and a two-step failure that every flow must survive.
+- The GUI lays out any number of switches: names sort naturally (`sw2` before `sw10`), larger
+  networks get an elliptical layout, and the view grows to fit.
+- A second GUI recording in the README, with eight switches and two link failures.
+
 ### Security
 - Frames with stacked 802.1Q tags are dropped (new drop reason `stacked-tag`). A host on an
   access port could send a priority tag (VID 0) with a second tag behind it; the switch removed

@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # definitions consumed by the scripts that source this file
 # Shared definition of the 3-switch test topology. Sourced by topo.sh, switches.sh and tests.
+# TOPOLOGY=large selects the 8-switch demo topology in scripts/topology-large.sh instead.
 #
 #            h1 (v10)  h2 (v20)
 #               |s1p1    |s1p2
@@ -15,6 +16,7 @@
 #      | s2p1             | s3p1  | s3p2
 #      h3 (v10)           h4(v20) h5 (v10)
 
+CONFIG_DIR=configs
 SWITCHES=(sw1 sw2 sw3)
 declare -A SWITCH_PORTS=(
   [sw1]="s1p1,s1p2,s1p3,s1p4"
@@ -32,6 +34,13 @@ declare -A HOSTS=(
   [h4]="s3p1 10.0.20.24/24 20"
   [h5]="s3p2 10.0.10.15/24 10"
 )
+if [[ "${TOPOLOGY:-}" == "large" ]]; then
+  # shellcheck source=scripts/topology-large.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/topology-large.sh"
+elif [[ -n "${TOPOLOGY:-}" ]]; then
+  echo "unknown TOPOLOGY '${TOPOLOGY}' (use 'large' or leave it unset)" >&2
+  exit 2
+fi
 RUN_DIR=${RUN_DIR:-/tmp/softswitch}
 BIN_DIR=${SOFTSWITCH_BIN_DIR:-build/release}
 
