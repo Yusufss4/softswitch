@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
 ### Added
 - L3 interfaces: `interface vlanN ip address A.B.C.D/N` (SVIs), `ip arp timeout`, `show ip
   interface`, `show arp`, `clear arp`. sw1 owns 10.0.10.1/24 and 10.0.20.1/24 in the test
@@ -145,7 +147,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Yusufss4/softswitch/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Yusufss4/softswitch/compare/v0.2.0...v0.3.0
