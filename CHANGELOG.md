@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-08
+
+First stable release: every roadmap milestone (M0-M7) is done.
+
 ### Added
 - `ss-pktgen` and `ss-sink`: AF_PACKET traffic generator and sink with sequence numbers and
   one-way latency (exact percentiles and a log-spaced histogram in its JSON output).
@@ -29,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a Pi 5, up from 652 kpps with the TX ring (+29 %), at 22 % fewer cycles per packet.
   `--tx-mode` rejects unknown values instead of falling back to the ring.
 - Shared region layout version 3: control and data plane binaries must be from the same build.
+- `gui::JsonWriter` writes floating-point values; the tools print their JSON through it.
+- `scripts/clang-tidy.sh` also checks `tools/`.
+
+### Fixed
+- `ss-pktgen` dereferenced an unchecked parse of `--dst-mac`/`--src-mac`; a malformed address is
+  now an error, and `--dst-mac` is required.
 
 ## [0.7.0] - 2026-11-08
 
@@ -183,7 +193,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...v0.5.0
