@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(softswitch
-  VERSION 1.0.0
+  VERSION 1.0.1
   DESCRIPTION "User-space L2/L3 software switch with a split control plane and data plane"
   HOMEPAGE_URL "https://github.com/Yusufss4/softswitch"
   LANGUAGES CXX)
