@@ -82,8 +82,8 @@ a lost ping. When the link returns, the original tree is restored.*
 Four flows cross the network: inside VLAN 10, inside VLAN 20, and two routed by sw1. The sw1–sw5
 chord fails, then the sw1–sw8 link as well. Each time the tree rebuilds (watch the blocked
 ports and the path costs), the other chord takes over, and no flow loses a ping. Then both links
-return. Running this topology is what found the two failover bugs fixed in #61; it is now an
-integration test.*
+return. The same scenario runs in CI as an integration test
+([tests/integration/test_large.sh](tests/integration/test_large.sh)).*
 
 ## Build
 
