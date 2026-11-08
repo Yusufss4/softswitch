@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-08
+
+The software is unchanged from 1.0.0. The v1.0.0 tag exists but was never published as a GitHub
+release: its release job failed while downloading syft, the SBOM tool, from GitHub Releases
+(HTTP 504 for hours). 1.0.1 is the first published 1.x release; its notes for the software are
+the 1.0.0 section below.
+
+### Fixed
+- Release pipeline: the SBOM is generated with syft's container image instead of a per-run
+  download from GitHub Releases, so release-asset outages no longer block a release (#58).
+
 ## [1.0.0] - 2026-11-08
 
 First stable release: every roadmap milestone (M0-M7) is done.
@@ -193,7 +204,8 @@ First stable release: every roadmap milestone (M0-M7) is done.
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Yusufss4/softswitch/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...v0.6.0
