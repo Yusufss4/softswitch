@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-08
+
+First stable release: every roadmap milestone (M0-M7) is done.
+
 ### Added
 - `ss-pktgen` and `ss-sink`: AF_PACKET traffic generator and sink with sequence numbers and
   one-way latency (exact percentiles and a log-spaced histogram in its JSON output).
@@ -183,7 +187,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...v0.5.0
