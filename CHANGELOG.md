@@ -33,6 +33,12 @@ First stable release: every roadmap milestone (M0-M7) is done.
   on a Pi 5, up from 652 kpps with the TX ring (+29 %), at 22 % fewer cycles per packet.
   `--tx-mode` rejects unknown values instead of falling back to the ring.
 - Shared region layout version 3: control and data plane binaries must be from the same build.
+- `gui::JsonWriter` writes floating-point values; the tools print their JSON through it.
+- `scripts/clang-tidy.sh` also checks `tools/`.
+
+### Fixed
+- `ss-pktgen` dereferenced an unchecked parse of `--dst-mac`/`--src-mac`; a malformed address is
+  now an error, and `--dst-mac` is required.
 
 ## [0.7.0] - 2026-11-08
 
