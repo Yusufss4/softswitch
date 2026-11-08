@@ -47,9 +47,9 @@ T must(std::optional<T> value, std::string_view what) {
 struct Options {
   std::string iface;
   std::optional<MacAddress> dst;
-  MacAddress src = must(MacAddress::parse("02:00:00:00:be:01"), "source MAC");
-  Ipv4Address src_ip = must(Ipv4Address::parse("10.99.0.1"), "source IP");
-  Ipv4Address dst_ip = must(Ipv4Address::parse("10.99.0.2"), "destination IP");
+  MacAddress src = MacAddress::from_u64(0x02000000be01ULL);  // 02:00:00:00:be:01
+  Ipv4Address src_ip = Ipv4Address::from_octets(10, 99, 0, 1);
+  Ipv4Address dst_ip = Ipv4Address::from_octets(10, 99, 0, 2);
   std::size_t size = 64;  ///< Frame size including the 4-byte FCS the wire would add.
   std::uint64_t rate = 0;
   double duration = 5.0;
