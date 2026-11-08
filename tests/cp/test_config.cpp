@@ -145,6 +145,21 @@ TEST(ConfigCommands, IgmpSnooping) {
   EXPECT_FALSE(run(c, "ip igmp frobnicate").ok);
 }
 
+TEST(ConfigCommands, SviAddresses) {
+  auto c = sample();
+  EXPECT_TRUE(run(c, "interface vlan10 ip address 10.0.10.1/24").ok);
+  EXPECT_EQ(c.svis.at(10).to_string(), "10.0.10.1/24");
+  EXPECT_FALSE(run(c, "interface vlan20 ip address 10.0.10.2/24").ok);  // overlapping subnet
+  EXPECT_FALSE(run(c, "interface vlan20 ip address 10.0.20.0/24").ok);  // network address
+  EXPECT_FALSE(run(c, "interface vlan20 ip address 10.0.20.1/32").ok);
+  EXPECT_FALSE(run(c, "interface vlan5000 ip address 10.0.20.1/24").ok);
+  EXPECT_TRUE(run(c, "interface vlan20 ip address 10.0.20.1/24").ok);
+  EXPECT_TRUE(run(c, "interface vlan10 no ip address").ok);
+  EXPECT_FALSE(c.svis.contains(10));
+  EXPECT_TRUE(run(c, "ip arp timeout 60").ok);
+  EXPECT_EQ(c.arp_timeout, 60U);
+}
+
 TEST(ConfigCommands, IsConfigCommand) {
   EXPECT_TRUE(is_config_command(tokenize("vlan 10")));
   EXPECT_TRUE(is_config_command(tokenize("no vlan 10")));

@@ -1,5 +1,6 @@
 #include "softswitch/dp/pipeline.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "softswitch/pkt/bpdu.hpp"
@@ -179,6 +180,19 @@ void Pipeline::process(const Tables& tables, PortId in_port, const RxFrame& fram
 
   const PortMask forwarding = vlan.members & forwarding_ports(tables);
 
+  // ---- L3: frames for the router, and ARP the router must see -------------------------------
+  if ((vlan.flags & shm::vlan_flag::kHasSvi) != 0) {
+    if (c.eth.dst == tables.router_mac) {
+      handle_router_frame(tables, in_port, c, egress);
+      return;
+    }
+    if (c.eth.ethertype == pkt::kEtherTypeArp) {
+      // Broadcast ARP: the control plane answers for the SVI and learns neighbours from a copy;
+      // the hosts on the VLAN still get the original.
+      (void)punt(tables, in_port, c, shm::PuntReason::kArp, /*copy_only=*/true);
+    }
+  }
+
   // ---- IGMP snooping: multicast only where somebody listens ---------------------------------
   if ((vlan.flags & shm::vlan_flag::kIgmpSnooping) != 0 && c.eth.ethertype == pkt::kEtherTypeIpv4 &&
       c.eth.dst.is_multicast() && !c.eth.dst.is_broadcast() &&
@@ -271,6 +285,35 @@ bool Pipeline::punt(const Tables& tables, PortId in_port, const Classified& c,
     trace(tables, in_port, c, Decision::kPunt, DropReason::kNone, 0, c.vlan);
   }
   return true;
+}
+
+bool Pipeline::is_own_address(const Tables& tables, Ipv4Address ip) noexcept {
+  const std::size_t n = std::min<std::size_t>(tables.num_svis, shm::kMaxSvis);
+  for (std::size_t i = 0; i < n; ++i) {
+    if (tables.svis[i].address.address == ip) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void Pipeline::handle_router_frame(const Tables& tables, PortId in_port, const Classified& c,
+                                   Egress& /*egress*/) noexcept {
+  if (c.eth.ethertype == pkt::kEtherTypeArp) {
+    (void)punt(tables, in_port, c, shm::PuntReason::kArp);  // e.g. replies to our requests
+    return;
+  }
+  const auto l3 = c.untagged.subspan(c.eth.payload_offset);
+  const auto ip = c.eth.ethertype == pkt::kEtherTypeIpv4 ? pkt::parse_ipv4(l3) : std::nullopt;
+  if (!ip || !pkt::ipv4_header_ok(l3)) {
+    reject(tables, in_port, c, DropReason::kMalformed);
+    return;
+  }
+  if (is_own_address(tables, ip->dst)) {
+    (void)punt(tables, in_port, c, shm::PuntReason::kToRouter);
+    return;
+  }
+  reject(tables, in_port, c, DropReason::kNoRoute);  // routing between SVIs: next PR
 }
 
 bool Pipeline::snoop_multicast(const Tables& tables, PortId in_port, const Classified& c,

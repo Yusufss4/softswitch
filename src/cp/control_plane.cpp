@@ -112,6 +112,7 @@ std::string ControlPlane::execute(const std::string& line) {
   if (result.changed) {
     log::info("config: ", line);
     reconcile_fdb();
+    sync_router();
     for (const auto& [vlan, routers] : std::map(snooper_.mrouter_ports())) {
       if (!config_.snooping_in(vlan)) {
         (void)snooper_.clear_vlan(vlan);
@@ -144,6 +145,7 @@ void ControlPlane::start() {
     load_startup_config(options_.config_file);
   }
   reconcile_fdb();
+  sync_router();
   ::mkdir(options_.run_dir.c_str(), 0755);
   memory_ = shm::create_region_memory("softswitch-" + options_.name);
   region_ = &shm::construct_region(memory_);
@@ -158,6 +160,10 @@ void ControlPlane::start() {
   loop_->every(std::chrono::seconds{1}, [this] {
     age_fdb();
     igmp_tick();
+    send_router_output(router_.tick(l3::Clock::now()));
+    if (router_.take_neighbors_changed()) {
+      schedule_publish();
+    }
   });
   // Retry publishes that timed out waiting for a grace period.
   loop_->every(std::chrono::milliseconds{20}, [this] {
@@ -252,6 +258,10 @@ void ControlPlane::on_notify() {
       }
     } else if (msg->reason == shm::PuntReason::kIgmp && msg->port < runtime_.size()) {
       on_igmp(*msg);
+    } else if (msg->reason == shm::PuntReason::kArp) {
+      send_router_output(router_.on_arp(msg->vlan, frame, l3::Clock::now()));
+    } else if (msg->reason == shm::PuntReason::kToRouter) {
+      send_router_output(router_.on_to_router(msg->vlan, frame));
     }
     region_->punt.pop();
   }
@@ -486,6 +496,27 @@ void ControlPlane::igmp_tick() {
   }
 }
 
+void ControlPlane::sync_router() {
+  l3::RouterConfig rc;
+  rc.mac = bridge_mac_;
+  rc.arp_timeout = std::chrono::seconds{config_.arp_timeout};
+  for (const auto& [vid, prefix] : config_.svis) {
+    if (config_.vlan_exists(vid)) {  // an SVI is only up while its VLAN exists
+      rc.svis.push_back(l3::Svi{vid, prefix});
+    }
+  }
+  router_.set_config(std::move(rc));
+}
+
+void ControlPlane::send_router_output(const std::vector<l3::Output>& outputs) {
+  for (const auto& o : outputs) {
+    inject_vlan(o.vlan, o.frame);
+  }
+  if (router_.take_neighbors_changed()) {
+    schedule_publish();
+  }
+}
+
 void ControlPlane::reconcile_fdb() {
   fdb_.clear_static();
   for (const auto& m : config_.static_macs) {
@@ -520,6 +551,12 @@ void ControlPlane::age_fdb() {
 }
 
 std::string ControlPlane::clear(const std::vector<std::string>& t) {
+  if (t.size() == 2 && t[1] == "arp") {
+    const auto n = router_.neighbors().size();
+    router_.clear_neighbors();
+    schedule_publish();
+    return "cleared " + std::to_string(n) + " ARP entries\n";
+  }
   // clear mac address-table [dynamic] [vlan ID] [interface PORT]
   if (t.size() < 3 || t[1] != "mac" || t[2] != "address-table") {
     return "% usage: clear mac address-table [dynamic] [vlan ID] [interface PORT]\n";
@@ -595,6 +632,20 @@ void ControlPlane::build_tables(shm::Tables& t) const {
     e.stp_state = i < stp_state_.size() ? stp_state_[i] : shm::StpState::kForwarding;
   }
   shm::clear_dynamic(t);
+  t.num_svis = 0;
+  for (const auto& svi : router_.config().svis) {
+    if (t.num_svis >= shm::kMaxSvis) {
+      break;
+    }
+    t.svis[t.num_svis] = shm::SviEntry{svi.vlan, svi.address};
+    t.vlans[svi.vlan].flags =
+        static_cast<std::uint8_t>(t.vlans[svi.vlan].flags | shm::vlan_flag::kHasSvi);
+    t.vlans[svi.vlan].svi_index = static_cast<std::uint8_t>(t.num_svis);
+    ++t.num_svis;
+  }
+  for (const auto& [addr, n] : router_.neighbors()) {
+    (void)shm::neighbor_insert(t, addr, n.mac, n.vlan);
+  }
   for (const auto& [vid, vlan] : config_.vlans) {
     (void)vlan;
     if (config_.snooping_in(vid)) {

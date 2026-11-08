@@ -69,7 +69,9 @@ struct SwitchConfig {
   std::set<VlanId> igmp_disabled_vlans;
   bool igmp_querier = false;  ///< Send general queries (no router in the network).
   std::uint32_t igmp_query_interval = 125;
-  bool igmp_fast_leave = true;  ///< Immediate leave on portfast (host) ports.
+  bool igmp_fast_leave = true;        ///< Immediate leave on portfast (host) ports.
+  std::map<VlanId, Ipv4Prefix> svis;  ///< `interface vlanN ip address A.B.C.D/N`
+  std::uint32_t arp_timeout = 300;
 
   /// True if IGMP snooping is active in @p vlan.
   [[nodiscard]] bool snooping_in(VlanId vlan) const noexcept {

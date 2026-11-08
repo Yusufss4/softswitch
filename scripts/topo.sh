@@ -33,6 +33,8 @@ up() {
     sudo ip netns exec "$h" ip link set lo up
     sudo ip netns exec "$h" ip addr add "$ip" dev eth0
     sudo ip netns exec "$h" ip link set eth0 up
+    # Default route via the subnet's .1 (sw1's SVI for that VLAN).
+    sudo ip netns exec "$h" ip route add default via "${ip%.*}.1"
     sudo ip netns exec "$h" sysctl -qw net.ipv6.conf.all.disable_ipv6=1
   done
   echo "topology up (loop: ${loop:-off})"

@@ -129,7 +129,38 @@ CommandResult cmd_switchport(PortConfig& port, const Tokens& t, std::size_t i) {
   return CommandResult::error("unknown switchport command");
 }
 
+/// interface vlanN ip address A.B.C.D/N | interface vlanN no ip address
+CommandResult cmd_svi(SwitchConfig& c, const Tokens& t) {
+  const auto vid = parse_vlan_id(std::string_view(t[1]).substr(4));
+  if (!vid) {
+    return bad_vlan(std::string_view(t[1]).substr(4));
+  }
+  if (t.size() == 5 && t[2] == "ip" && t[3] == "address") {
+    const auto prefix = Ipv4Prefix::parse(t[4]);
+    if (!prefix || prefix->length == 0 || prefix->length > 30 ||
+        prefix->address == prefix->network()) {
+      return CommandResult::error("need a host address with a /1-/30 prefix, e.g. 10.0.10.1/24");
+    }
+    for (const auto& [other, addr] : c.svis) {
+      if (other != *vid && (addr.contains(prefix->address) || prefix->contains(addr.address))) {
+        return CommandResult::error("overlaps the subnet of interface vlan" +
+                                    std::to_string(other));
+      }
+    }
+    c.svis[*vid] = *prefix;
+    return CommandResult::success();
+  }
+  if (t.size() == 5 && t[2] == "no" && t[3] == "ip" && t[4] == "address") {
+    return c.svis.erase(*vid) != 0 ? CommandResult::success() : CommandResult::unchanged();
+  }
+  return CommandResult::error(
+      "usage: interface vlanN ip address A.B.C.D/N | interface vlanN no ip address");
+}
+
 CommandResult cmd_interface(SwitchConfig& c, const Tokens& t) {
+  if (t.size() >= 3 && t[1].starts_with("vlan") && !c.port_index(t[1])) {
+    return cmd_svi(c, t);
+  }
   if (t.size() < 3) {
     return CommandResult::error(
         "usage: interface PORT <description|shutdown|no shutdown|switchport ...>");
@@ -268,6 +299,14 @@ CommandResult cmd_spanning_tree(SwitchConfig& c, const Tokens& t, bool negate) {
 
 // ip igmp snooping [vlan ID | querier | query-interval N | fast-leave]  (and the "no" forms)
 CommandResult cmd_ip(SwitchConfig& c, const Tokens& t, bool negate) {
+  if (!negate && t.size() == 4 && t[1] == "arp" && t[2] == "timeout") {
+    const auto secs = parse_uint(t[3], 86400);
+    if (!secs || *secs < 10) {
+      return CommandResult::error("ARP timeout must be 10..86400 seconds");
+    }
+    c.arp_timeout = *secs;
+    return CommandResult::success();
+  }
   if (t.size() >= 3 && t[1] == "igmp" && t[2] == "snooping") {
     if (t.size() == 3) {
       c.igmp_snooping = !negate;
@@ -507,6 +546,12 @@ std::string render_running_config(const SwitchConfig& c) {
   }
   if (!c.igmp_fast_leave) {
     out << "no ip igmp snooping fast-leave\n";
+  }
+  if (c.arp_timeout != defaults_cfg.arp_timeout) {
+    out << "ip arp timeout " << c.arp_timeout << "\n";
+  }
+  for (const auto& [vid, prefix] : c.svis) {
+    out << "interface vlan" << vid << " ip address " << prefix.to_string() << "\n";
   }
   for (const auto& m : c.static_macs) {
     out << "mac address-table static " << m.mac.to_string() << " vlan " << m.vlan << " interface "

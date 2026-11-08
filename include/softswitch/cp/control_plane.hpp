@@ -15,6 +15,7 @@
 #include "softswitch/cp/netlink.hpp"
 #include "softswitch/igmp/snooper.hpp"
 #include "softswitch/l2/fdb.hpp"
+#include "softswitch/l3/router.hpp"
 #include "softswitch/shm/publisher.hpp"
 #include "softswitch/shm/region.hpp"
 #include "softswitch/stp/rstp.hpp"
@@ -81,6 +82,9 @@ class ControlPlane {
   void inject_vlan(VlanId vlan, std::span<const std::uint8_t> frame);
   void inject(const shm::PacketMessage& prototype, std::span<const std::uint8_t> frame);
   void on_igmp(const shm::PacketMessage& msg);
+  /// Pushes SVIs and router settings from the config into the router.
+  void sync_router();
+  void send_router_output(const std::vector<l3::Output>& outputs);
   void igmp_tick();
   /// Sends an IGMP query in @p vlan (general when @p group is 0.0.0.0).
   void send_igmp_query(VlanId vlan, Ipv4Address group, std::uint8_t max_resp_tenths);
@@ -102,6 +106,8 @@ class ControlPlane {
   [[nodiscard]] std::string show_mac(const std::vector<std::string>& tokens) const;
   [[nodiscard]] std::string show_spanning_tree() const;
   [[nodiscard]] std::string show_igmp() const;
+  [[nodiscard]] std::string show_ip_interface() const;
+  [[nodiscard]] std::string show_arp() const;
 
   EventLoop* loop_;
   ControlPlaneOptions options_;
@@ -113,6 +119,7 @@ class ControlPlane {
   std::vector<shm::StpState> stp_state_;
   std::uint64_t inject_drops_ = 0;
   igmp::Snooper snooper_;
+  l3::Router router_{l3::RouterConfig{}};
   std::map<VlanId, stp::Clock::time_point> next_query_;  ///< Querier schedule per VLAN.
   std::map<VlanId, int> startup_queries_left_;
   std::uint64_t learn_events_ = 0;
