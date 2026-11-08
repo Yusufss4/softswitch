@@ -14,7 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   merge rules), builds ICMP time-exceeded, queues packets per unresolved next hop with ARP
   retries, and computes the route table (connected + static).
 - Data plane: in SVI VLANs broadcast ARP is punted as a copy and flooded; frames to the router
-  MAC are punted (ARP, IPv4 to an SVI address) or dropped (no route yet). `fuzz_router` target.
+  MAC are punted (ARP, IPv4 to an SVI address). `fuzz_router` target.
+- Inter-VLAN routing in the data plane: longest-prefix match, next-hop neighbour lookup, MAC
+  rewrite, TTL decrement with an incremental checksum update, and L2 forwarding in the egress
+  VLAN with its tagging. Neighbour misses are resolved by the control plane (ARP, packets queued
+  and released); TTL expiry is answered with ICMP time exceeded.
+- `[no] ip routing`, `[no] ip route PREFIX NEXTHOP`, `show ip route`.
 
 ## [0.5.0] - 2026-11-08
 
