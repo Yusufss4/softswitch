@@ -46,6 +46,10 @@ int run(std::span<char*> args) {
       options.run_dir = value();
     } else if (arg == "--config") {
       options.config_file = value();
+    } else if (arg == "--http-port") {
+      options.http_port = static_cast<std::uint16_t>(std::stoul(value()));
+    } else if (arg == "--http-bind") {
+      options.http_bind = value();
     } else if (arg == "--debug") {
       softswitch::log::set_level(softswitch::log::Level::kDebug);
     } else if (arg == "--version") {

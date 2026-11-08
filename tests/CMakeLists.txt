@@ -11,6 +11,8 @@ add_executable(softswitch_tests
   dp/test_pipeline_l3.cpp
   dp/test_pipeline_learning.cpp
   dp/test_pipeline_vlan.cpp
+  gui/test_http.cpp
+  gui/test_json.cpp
   igmp/test_snooper.cpp
   l2/test_fdb.cpp
   l3/test_router.cpp

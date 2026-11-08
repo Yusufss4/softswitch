@@ -3,6 +3,7 @@
 /// @file
 /// softswitchd: owns configuration and protocol state, publishes tables to the data plane.
 
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -13,6 +14,7 @@
 #include "softswitch/cp/config.hpp"
 #include "softswitch/cp/event_loop.hpp"
 #include "softswitch/cp/netlink.hpp"
+#include "softswitch/gui/http.hpp"
 #include "softswitch/igmp/snooper.hpp"
 #include "softswitch/l2/fdb.hpp"
 #include "softswitch/l3/router.hpp"
@@ -28,7 +30,9 @@ struct ControlPlaneOptions {
   std::string name = "sw1";
   std::vector<std::string> ports;
   std::string run_dir = "/tmp/softswitch";
-  std::string config_file;  ///< Startup config (CLI commands, one per line); optional.
+  std::string config_file;      ///< Startup config (CLI commands, one per line); optional.
+  std::uint16_t http_port = 0;  ///< Read-only web GUI; 0 = off.
+  std::string http_bind = "0.0.0.0";
 };
 
 /// Derives a stable, locally administered MAC from the switch name (bridge ID / router MAC).
@@ -110,6 +114,13 @@ class ControlPlane {
   [[nodiscard]] std::string show_arp() const;
   [[nodiscard]] std::string show_ip_route() const;
 
+  // web GUI (gui_api.cpp)
+  void start_gui();
+  void drain_traces();
+  [[nodiscard]] std::string state_json() const;
+  [[nodiscard]] std::string traces_json() const;
+  [[nodiscard]] std::string trace_json(const shm::TraceRecord& record) const;
+
   EventLoop* loop_;
   ControlPlaneOptions options_;
   MacAddress bridge_mac_;
@@ -121,6 +132,10 @@ class ControlPlane {
   std::uint64_t inject_drops_ = 0;
   igmp::Snooper snooper_;
   l3::Router router_{l3::RouterConfig{}};
+  std::unique_ptr<gui::HttpServer> http_;
+  std::deque<shm::TraceRecord> recent_traces_;  ///< Last kRecentTraces sampled decisions.
+  std::uint64_t traces_seen_ = 0;
+  static constexpr std::size_t kRecentTraces = 1000;
   std::map<VlanId, stp::Clock::time_point> next_query_;  ///< Querier schedule per VLAN.
   std::map<VlanId, int> startup_queries_left_;
   std::uint64_t learn_events_ = 0;

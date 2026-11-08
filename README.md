@@ -34,7 +34,18 @@ packets using tables the control plane publishes through shared memory.
     build/release/sscli -s sw2 show spanning-tree        # one port blocks the loop
     build/release/sscli -s sw1 show mac address-table
     build/release/sscli -s sw1                            # interactive CLI
+    # browse http://<pi>:8081/ for the live view
     scripts/switches.sh stop && scripts/topo.sh down
+
+## Web GUI
+
+Every `softswitchd` can serve a read-only page (`--http-port`; `scripts/switches.sh` uses
+8081-8083). Open `http://<pi>:8081/` to watch the three switches: the topology with spanning-tree
+port states, links flashing as sampled packets cross them, a filterable live trace of forwarding
+decisions (forwarded, flooded, routed, punted, dropped and why), and the MAC, IGMP, ARP and route
+tables. Sampling is set per switch with `trace sample N`.
+
+![softswitch web GUI](docs/images/gui.png)
 
 ## Build
 

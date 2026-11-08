@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Read-only web GUI served by `softswitchd` (`--http-port`, `--http-bind`): topology with
+  spanning-tree port states and links that flash as sampled packets cross them, a filterable live
+  trace of forwarding decisions, and port/STP/MAC/IGMP/ARP/route/drop tables. Plain JS and SVG,
+  embedded in the binary at build time; no external requests.
+- HTTP/1.1 server in the control-plane event loop: GET only, bounded request heads, CORS, and
+  Server-Sent Events with a bounded per-client backlog (slow clients lose events, counted).
+- `/api/state`, `/api/traces` and the `/events` trace stream; trace records carry timestamps.
+- `fuzz_http` fuzz target; `scripts/switches.sh` serves the GUI on 8081-8083.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added

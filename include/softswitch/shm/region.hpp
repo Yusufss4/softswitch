@@ -90,6 +90,10 @@ enum class DropReason : std::uint8_t {
 };
 inline constexpr std::size_t kDropReasonCount = static_cast<std::size_t>(DropReason::kCount);
 
+[[nodiscard]] const char* to_string(Decision decision) noexcept;
+[[nodiscard]] const char* to_string(DropReason reason) noexcept;
+[[nodiscard]] const char* to_string(StpState state) noexcept;
+
 /// One sampled forwarding decision, for the GUI and `show trace`.
 struct TraceRecord {
   std::uint64_t timestamp_ns = 0;

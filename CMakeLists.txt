@@ -35,6 +35,8 @@ add_library(softswitch_proto
   src/cp/netlink_parse.cpp
   src/cp/text_table.cpp
   src/dp/pipeline.cpp
+  src/gui/http_parse.cpp
+  src/gui/json.cpp
   src/igmp/snooper.cpp
   src/l2/fdb.cpp
   src/l3/router.cpp
@@ -45,6 +47,7 @@ add_library(softswitch_proto
   src/pkt/icmp.cpp
   src/pkt/igmp.cpp
   src/pkt/ipv4.cpp
+  src/shm/names.cpp
   src/shm/publisher.cpp
   src/shm/tables.cpp
 )
@@ -60,10 +63,13 @@ add_library(softswitch_runtime
   src/cp/cli_server.cpp
   src/cp/control_plane.cpp
   src/cp/event_loop.cpp
+  src/cp/gui_api.cpp
   src/cp/netlink.cpp
   src/cp/show.cpp
   src/dp/af_packet_port.cpp
   src/dp/dataplane.cpp
+  src/gui/http_server.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/generated/gui_assets.cpp
   src/shm/region_mapping.cpp
   src/sys/fd.cpp
   src/sys/realtime.cpp
@@ -72,6 +78,20 @@ add_library(softswitch_runtime
 )
 add_library(softswitch::runtime ALIAS softswitch_runtime)
 target_link_libraries(softswitch_runtime PUBLIC softswitch::proto Threads::Threads)
+
+# The web GUI's static files are compiled into softswitchd.
+set(SOFTSWITCH_GUI_ASSETS index.html app.js style.css)
+list(TRANSFORM SOFTSWITCH_GUI_ASSETS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/gui/www/" OUTPUT_VARIABLE _gui_asset_paths)
+add_custom_command(
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_assets.cpp"
+  COMMAND ${CMAKE_COMMAND} -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/generated/gui_assets.cpp
+          -DASSET_DIR=${CMAKE_CURRENT_SOURCE_DIR}/src/gui/www "-DASSETS=${SOFTSWITCH_GUI_ASSETS}"
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedAssets.cmake
+  DEPENDS ${_gui_asset_paths} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedAssets.cmake
+  COMMENT "Embedding web GUI assets"
+  VERBATIM)
+# Lets analysis tools generate the source without building everything (scripts/cppcheck.sh).
+add_custom_target(softswitch_gui_assets DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/generated/gui_assets.cpp")
 
 # ---- executables ------------------------------------------------------------
 add_executable(softswitchd src/cp/main.cpp)

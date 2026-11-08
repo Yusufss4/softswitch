@@ -58,6 +58,7 @@ void Pipeline::trace(const Tables& tables, PortId in_port, const Classified& c, 
     return;  // lossy by design
   }
   *rec = shm::TraceRecord{};
+  rec->timestamp_ns = now_ns_;
   rec->in_port = in_port;
   rec->vlan = c.vlan;
   rec->out_vlan = out_vlan;

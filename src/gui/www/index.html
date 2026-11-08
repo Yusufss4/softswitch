@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>softswitch</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>softswitch</h1>
+    <span class="subtitle">live forwarding view</span>
+    <div id="switch-status" class="chips" aria-live="polite"></div>
+  </header>
+
+  <main>
+    <section class="panel" id="topology-panel">
+      <div class="panel-head">
+        <h2>Topology</h2>
+        <div class="legend">
+          <span class="dot fwd"></span>forwarding
+          <span class="dot lrn"></span>learning
+          <span class="dot blk"></span>blocked
+          <span class="dot down"></span>down
+        </div>
+      </div>
+      <svg id="topology" viewBox="0 0 720 500" role="img" aria-label="Switch topology"></svg>
+      <p class="hint">Links flash as sampled packets cross them. Port dots show spanning-tree state.</p>
+    </section>
+
+    <section class="panel" id="trace-panel">
+      <div class="panel-head">
+        <h2>Live packets</h2>
+        <div class="controls">
+          <select id="trace-switch" aria-label="Filter by switch"><option value="">all switches</option></select>
+          <input id="trace-filter" type="search" placeholder="filter: vlan 10, icmp, drop, 10.0.10.11 ..." aria-label="Filter packets">
+          <button id="trace-pause" type="button">Pause</button>
+          <button id="trace-clear" type="button">Clear</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="trace">
+          <thead><tr><th>Time</th><th>Switch</th><th>In</th><th>VLAN</th><th>Source → Destination</th><th>Proto</th><th>Decision</th><th>Out</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint" id="trace-stats"></p>
+    </section>
+
+    <section class="panel" id="tables-panel">
+      <div class="panel-head">
+        <h2>Tables</h2>
+        <div class="controls">
+          <select id="table-switch" aria-label="Switch"></select>
+          <div class="tabs" role="tablist" id="tabs">
+            <button type="button" data-tab="ports" class="active">Ports</button>
+            <button type="button" data-tab="stp">Spanning tree</button>
+            <button type="button" data-tab="fdb">MAC table</button>
+            <button type="button" data-tab="mdb">IGMP</button>
+            <button type="button" data-tab="l3">ARP &amp; routes</button>
+            <button type="button" data-tab="drops">Drops</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap" id="table-view"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

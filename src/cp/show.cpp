@@ -15,54 +15,6 @@ namespace {
 std::string u64(std::uint64_t v) { return std::to_string(v); }
 std::uint64_t get(const std::atomic<std::uint64_t>& a) { return a.load(std::memory_order_relaxed); }
 
-const char* stp_state_name(shm::StpState s) {
-  switch (s) {
-    case shm::StpState::kDisabled:
-      return "disabled";
-    case shm::StpState::kDiscarding:
-      return "discarding";
-    case shm::StpState::kLearning:
-      return "learning";
-    case shm::StpState::kForwarding:
-      return "forwarding";
-  }
-  return "?";
-}
-
-const char* drop_reason_name(shm::DropReason r) {
-  switch (r) {
-    case shm::DropReason::kNone:
-      return "none";
-    case shm::DropReason::kPortDown:
-      return "port-down";
-    case shm::DropReason::kMalformed:
-      return "malformed";
-    case shm::DropReason::kUntaggedNotAllowed:
-      return "untagged-not-allowed";
-    case shm::DropReason::kTaggedOnAccess:
-      return "tagged-on-access";
-    case shm::DropReason::kVlanNotMember:
-      return "vlan-not-member";
-    case shm::DropReason::kStpBlocked:
-      return "stp-blocked";
-    case shm::DropReason::kReservedMulticast:
-      return "reserved-multicast";
-    case shm::DropReason::kSameSegment:
-      return "same-segment";
-    case shm::DropReason::kNoEgress:
-      return "no-egress";
-    case shm::DropReason::kNoRoute:
-      return "no-route";
-    case shm::DropReason::kPuntRingFull:
-      return "punt-ring-full";
-    case shm::DropReason::kNoListeners:
-      return "no-listeners";
-    case shm::DropReason::kCount:
-      break;
-  }
-  return "?";
-}
-
 constexpr const char* kHelp =
     "show version | running-config | interfaces | vlan | counters | dataplane\n"
     "show mac address-table [vlan ID] [interface PORT]\n"
@@ -152,7 +104,7 @@ std::string ControlPlane::show_interfaces() const {
     const auto& c = region_->dp.ports[i];
     table.add_row({p.name, p.shutdown ? "down" : "up", runtime_[i].oper_up ? "up" : "down",
                    p.mode == shm::PortMode::kTrunk ? "trunk" : "access",
-                   e.pvid == 0 ? "-" : std::to_string(e.pvid), stp_state_name(e.stp_state),
+                   e.pvid == 0 ? "-" : std::to_string(e.pvid), shm::to_string(e.stp_state),
                    u64(get(c.rx_packets)), u64(get(c.tx_packets)), u64(get(c.drops)),
                    p.description});
   }
@@ -190,7 +142,7 @@ std::string ControlPlane::show_counters() const {
   for (std::size_t r = 1; r < shm::kDropReasonCount; ++r) {
     const auto n = get(region_->dp.drops[r]);
     if (n != 0) {
-      drops.add_row({drop_reason_name(static_cast<shm::DropReason>(r)), u64(n)});
+      drops.add_row({shm::to_string(static_cast<shm::DropReason>(r)), u64(n)});
     }
   }
   return ports.render() + "\n" + (drops.empty() ? std::string("no drops\n") : drops.render());
