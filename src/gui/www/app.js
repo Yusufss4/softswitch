@@ -119,9 +119,14 @@ function subscribe(endpoint) {
 // Links come from port descriptions: "peer sw2 s2p2" (switch to switch) and "host h1".
 const linkElements = new Map();  // "sw:port" -> SVG line
 
+// "sw2" before "sw10".
+function byNaturalName(a, b) {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
 function buildModel() {
   const switches = [...state.values()];
-  const names = switches.map((s) => s.name).sort();
+  const names = switches.map((s) => s.name).sort(byNaturalName);
   const links = [];
   const seen = new Set();
   const hosts = [];
@@ -143,14 +148,36 @@ function buildModel() {
   return { names, links, hosts, byName: new Map(switches.map((s) => [s.name, s])) };
 }
 
+// Switches on an ellipse around (360, 255). Up to four keep the original 120 px circle; larger
+// networks get a wider ellipse (the panel is wider than tall) and shorter host spokes.
 function layout(names) {
   const pos = new Map();
-  const cx = 360, cy = 255, r = names.length > 1 ? 120 : 0;
-  names.forEach((n, i) => {
-    const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(names.length, 1);
-    pos.set(n, { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), a });
+  const n = names.length;
+  const cx = 360, cy = 255;
+  const ry = n > 1 ? Math.max(120, 24 * n) : 0;
+  const rx = n > 4 ? ry * 1.4 : ry;
+  names.forEach((name, i) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(n, 1);
+    pos.set(name, { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), a });
   });
   return pos;
+}
+
+function hostDistance(switchCount) {
+  return switchCount > 4 ? 70 : 100;
+}
+
+// Grows the SVG viewBox (never below the original 720x500) to fit everything drawn.
+function fitViewBox(svg, points) {
+  const pad = 30;
+  let minX = 0, minY = 0, maxX = 720, maxY = 500;
+  for (const p of points) {
+    minX = Math.min(minX, p.x - 40 - pad);
+    maxX = Math.max(maxX, p.x + 40 + pad);
+    minY = Math.min(minY, p.y - 24 - pad);
+    maxY = Math.max(maxY, p.y + 24 + pad);
+  }
+  svg.setAttribute("viewBox", `${minX} ${minY} ${maxX - minX} ${maxY - minY}`);
 }
 
 function portState(sw, port) {
@@ -188,7 +215,8 @@ function renderTopology() {
     linkElements.set(`${l.b}:${l.bp}`, line);
     portDot(a, b, sa, l.ap);
     portDot(b, a, sb, l.bp);
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    // Label a little off-centre so links crossing in the middle keep readable labels.
+    const mid = { x: a.x + (b.x - a.x) * 0.42, y: a.y + (b.y - a.y) * 0.42 };
     svg.append(svgEl("text", { x: mid.x + 6, y: mid.y - 6, class: "small" }, `${l.ap} – ${l.bp}`));
   }
 
@@ -198,13 +226,16 @@ function renderTopology() {
     list.push(h);
     perSwitch.set(h.sw, list);
   }
+  const spoke = hostDistance(model.names.length);
+  const drawn = [...pos.values()];
   for (const [swName, list] of perSwitch) {
     const p = pos.get(swName);
     if (!p) continue;
     list.forEach((h, i) => {
       const spread = (i - (list.length - 1) / 2) * 0.55;
       const a = p.a + spread;
-      const hp = { x: p.x + 100 * Math.cos(a), y: p.y + 100 * Math.sin(a) };
+      const hp = { x: p.x + spoke * Math.cos(a), y: p.y + spoke * Math.sin(a) };
+      drawn.push(hp);
       const line = svgEl("line", { x1: p.x, y1: p.y, x2: hp.x, y2: hp.y, class: "link" });
       svg.append(line);
       linkElements.set(`${swName}:${h.port}`, line);
@@ -224,6 +255,7 @@ function renderTopology() {
              svgEl("text", { x: p.x - 30, y: p.y + 14, class: "small" }, s.stp?.is_root ? "STP root" : `cost ${s.stp?.root_cost ?? "-"}`));
     svg.append(g);
   }
+  fitViewBox(svg, drawn);
 }
 
 function flashLinks(t) {
@@ -250,7 +282,7 @@ function renderStatus() {
 }
 
 function renderSwitchSelectors() {
-  const names = [...state.values()].map((s) => s.name).sort();
+  const names = [...state.values()].map((s) => s.name).sort(byNaturalName);
   for (const id of ["trace-switch", "table-switch"]) {
     const sel = $(id);
     const keep = sel.value;
