@@ -41,6 +41,19 @@ void set_int_option(int fd, int level, int option, int value, const char* what) 
 
 }  // namespace
 
+std::optional<TxMode> parse_tx_mode(std::string_view name) noexcept {
+  if (name == "ring") {
+    return TxMode::kRing;
+  }
+  if (name == "sendto") {
+    return TxMode::kSendto;
+  }
+  if (name == "sendmmsg") {
+    return TxMode::kSendmmsg;
+  }
+  return std::nullopt;
+}
+
 AfPacketPort::AfPacketPort(const AfPacketOptions& options)
     : options_(options), ifindex_(static_cast<int>(::if_nametoindex(options.ifname.c_str()))) {
   if (ifindex_ == 0) {
@@ -72,6 +85,16 @@ AfPacketPort::AfPacketPort(const AfPacketOptions& options)
   set_int_option(tx_fd_.get(), SOL_PACKET, PACKET_QDISC_BYPASS, 1, "PACKET_QDISC_BYPASS");
   if (options.tx_mode == TxMode::kRing) {
     setup_ring(tx_fd_.get(), PACKET_TX_RING, tx_, options.tx_frames);
+  } else if (options.tx_mode == TxMode::kSendmmsg) {
+    tx_scratch_.resize(static_cast<std::size_t>(kMmsgBatch) * options.frame_size);
+    tx_iov_.resize(kMmsgBatch);
+    tx_msgs_.resize(kMmsgBatch);
+    for (std::uint32_t i = 0; i < kMmsgBatch; ++i) {
+      tx_iov_[i].iov_base = tx_scratch_.data() + (static_cast<std::size_t>(i) * options.frame_size);
+      tx_msgs_[i] = {};
+      tx_msgs_[i].msg_hdr.msg_iov = &tx_iov_[i];
+      tx_msgs_[i].msg_hdr.msg_iovlen = 1;
+    }
   } else {
     tx_scratch_.resize(options.frame_size);
   }
@@ -171,6 +194,25 @@ bool AfPacketPort::tx(std::span<const std::uint8_t> untagged,
     return ::send(tx_fd_.get(), frame.data(), frame.size(), MSG_DONTWAIT) ==
            static_cast<ssize_t>(frame.size());
   }
+  if (options_.tx_mode == TxMode::kSendmmsg) {
+    if (len > options_.frame_size) {
+      return false;
+    }
+    if (tx_pending_ == kMmsgBatch) {
+      tx_flush();  // batch full: send it and start a new one
+    }
+    iovec& iov = tx_iov_[tx_pending_];
+    const std::span<std::uint8_t> dst(static_cast<std::uint8_t*>(iov.iov_base),
+                                      options_.frame_size);
+    if (tci) {
+      (void)pkt::copy_with_tag(untagged, *tci, dst);
+    } else {
+      std::copy(untagged.begin(), untagged.end(), dst.begin());
+    }
+    iov.iov_len = len;
+    ++tx_pending_;
+    return true;
+  }
 
   std::uint8_t* slot = tx_.frame(tx_.next);
   tpacket2_hdr* h = header(slot);
@@ -197,6 +239,24 @@ bool AfPacketPort::tx(std::span<const std::uint8_t> untagged,
 
 void AfPacketPort::tx_flush() noexcept {
   if (tx_pending_ == 0) {
+    return;
+  }
+  if (options_.tx_mode == TxMode::kSendmmsg) {
+    // Each message becomes one linear skb (a copy, as with sendto), but the batch costs one
+    // syscall. Frames the kernel refuses (e.g. -ENOBUFS) are dropped and counted.
+    std::uint32_t sent = 0;
+    while (sent < tx_pending_) {
+      const int n = ::sendmmsg(tx_fd_.get(), &tx_msgs_[sent], tx_pending_ - sent, MSG_DONTWAIT);
+      if (n <= 0) {
+        if (n < 0 && errno == EINTR) {
+          continue;
+        }
+        tx_ring_full_ += tx_pending_ - sent;
+        break;
+      }
+      sent += static_cast<std::uint32_t>(n);
+    }
+    tx_pending_ = 0;
     return;
   }
   // With PACKET_QDISC_BYPASS the kernel walks the ring synchronously inside send().

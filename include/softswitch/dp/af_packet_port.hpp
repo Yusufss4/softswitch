@@ -7,10 +7,13 @@
 /// when full or when the block timer (>= 1 ms) fires, which adds up to a millisecond of latency
 /// per hop at low rates. V2 releases every frame individually.
 
+#include <sys/socket.h>
+
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "softswitch/dp/port_io.hpp"
@@ -19,16 +22,20 @@
 namespace softswitch::dp {
 
 enum class TxMode : std::uint8_t {
-  kRing,    ///< PACKET_TX_RING + one send() per batch (default).
-  kSendto,  ///< One send() syscall per frame (baseline for benchmarks).
+  kRing,      ///< PACKET_TX_RING + one send() per batch.
+  kSendto,    ///< One send() syscall per frame (baseline for benchmarks).
+  kSendmmsg,  ///< Linear copies staged per batch, one sendmmsg() per flush (default).
 };
+
+/// Parses "ring", "sendto" or "sendmmsg".
+std::optional<TxMode> parse_tx_mode(std::string_view name) noexcept;
 
 struct AfPacketOptions {
   std::string ifname;
   std::uint32_t frame_size = 2048;
   std::uint32_t rx_frames = 1024;
   std::uint32_t tx_frames = 512;
-  TxMode tx_mode = TxMode::kRing;
+  TxMode tx_mode = TxMode::kSendmmsg;
 };
 
 class AfPacketPort final : public PortIo {
@@ -76,7 +83,13 @@ class AfPacketPort final : public PortIo {
   std::uint32_t rx_held_ = 0;     ///< Frames handed out by the last rx_burst().
   std::uint32_t tx_pending_ = 0;  ///< Frames queued since the last flush.
   std::uint64_t tx_ring_full_ = 0;
-  std::vector<std::uint8_t> tx_scratch_;  ///< kSendto mode staging buffer.
+  std::uint64_t rx_kernel_drops_ = 0;     ///< PACKET_STATISTICS resets on read; accumulated here.
+  std::vector<std::uint8_t> tx_scratch_;  ///< kSendto: one frame; kSendmmsg: kMmsgBatch frames.
+  /// kSendmmsg: frames staged since the last flush. Sized once in the constructor, so tx() and
+  /// tx_flush() never allocate.
+  static constexpr std::uint32_t kMmsgBatch = 64;
+  std::vector<iovec> tx_iov_;
+  std::vector<mmsghdr> tx_msgs_;
 };
 
 }  // namespace softswitch::dp
