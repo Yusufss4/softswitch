@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
 ### Added
 - Read-only web GUI served by `softswitchd` (`--http-port`, `--http-bind`): topology with
   spanning-tree port states and links that flash as sampled packets cross them, a filterable live
@@ -157,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Yusufss4/softswitch/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Yusufss4/softswitch/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Yusufss4/softswitch/compare/v0.3.0...v0.4.0

@@ -12,7 +12,7 @@ like the software stack on a Marvell or Broadcom switch: a **control plane** own
 configuration and protocol state, and a separate, pinned, real-time **data plane** forwards
 packets using tables the control plane publishes through shared memory.
 
-> **Status:** M5 done: 802.1Q VLANs, MAC learning/aging, Rapid Spanning Tree, IGMP snooping and inter-VLAN routing with ARP/ICMP, on the split control/data plane. See the
+> **Status:** M6 done (web GUI): 802.1Q VLANs, MAC learning/aging, Rapid Spanning Tree, IGMP snooping and inter-VLAN routing with ARP/ICMP, on the split control/data plane. See the
 > [milestones](https://github.com/Yusufss4/softswitch/milestones) for the roadmap.
 
 ## Planned features
