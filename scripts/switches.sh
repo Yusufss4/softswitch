@@ -15,9 +15,12 @@ start_one() {
   mkdir -p "$RUN_DIR"
   local config_args=()
   [[ -f "configs/$sw.conf" ]] && config_args=(--config "configs/$sw.conf")
-  # shellcheck disable=SC2086
+  # Web GUI on 8081, 8082, ... (HTTP_BASE_PORT); 0 disables it.
+  local http_args=()
+  [[ "${HTTP_BASE_PORT:-8081}" != "0" ]] && http_args=(--http-port "$((${HTTP_BASE_PORT:-8081} + index))")
+  # shellcheck disable=SC2086  # CP_ARGS is intentionally word-split
   "$BIN_DIR/softswitchd" --name "$sw" --ports "${SWITCH_PORTS[$sw]}" --run-dir "$RUN_DIR" \
-    "${config_args[@]}" ${CP_ARGS:-} >"$RUN_DIR/$sw.cp.log" 2>&1 &
+    "${config_args[@]}" "${http_args[@]}" ${CP_ARGS:-} >"$RUN_DIR/$sw.cp.log" 2>&1 &
   echo $! >"$RUN_DIR/$sw.cp.pid"
   for _ in $(seq 50); do
     [[ -S "$RUN_DIR/$sw.dp.sock" ]] && break
