@@ -100,6 +100,12 @@ add_executable(ss-dataplane src/dp/main.cpp)
 target_link_libraries(ss-dataplane PRIVATE softswitch::runtime)
 add_executable(sscli tools/sscli.cpp)
 target_link_libraries(sscli PRIVATE softswitch::runtime)
+add_executable(ss-pktgen tools/ss_pktgen.cpp)
+target_link_libraries(ss-pktgen PRIVATE softswitch::runtime)
+add_executable(ss-sink tools/ss_sink.cpp)
+target_link_libraries(ss-sink PRIVATE softswitch::runtime)
+add_executable(ss-hog tools/ss_hog.cpp)
+target_link_libraries(ss-hog PRIVATE softswitch::runtime)
 
 # ---- tests / benchmarks / fuzzers -------------------------------------------
 if(SOFTSWITCH_BUILD_TESTS)
@@ -126,7 +132,7 @@ endif()
 
 # ---- install / package ------------------------------------------------------
 include(GNUInstallDirs)
-install(TARGETS softswitchd ss-dataplane sscli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS softswitchd ss-dataplane sscli ss-pktgen ss-sink ss-hog RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES README.md LICENSE CHANGELOG.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
 
 set(CPACK_PACKAGE_NAME "softswitch")
