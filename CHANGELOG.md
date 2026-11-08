@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-08
+
 ### Added
 - An 8-switch demo topology, a ring with two chords (`TOPOLOGY=large` for `scripts/topo.sh`
   and `scripts/switches.sh`, configs in `configs/large/`), and `test_large`: three loops for RSTP,
@@ -231,7 +233,8 @@ First stable release: every roadmap milestone (M0-M7) is done.
 - Release pipeline: arm64 packages, SHA256SUMS, SPDX SBOM, Doxygen docs on GitHub Pages.
 - `MacTable`: a MAC learning table with aging (starter L2 forwarding database).
 
-[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Yusufss4/softswitch/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Yusufss4/softswitch/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Yusufss4/softswitch/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Yusufss4/softswitch/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/Yusufss4/softswitch/compare/v0.6.0...v0.7.0
