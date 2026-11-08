@@ -101,7 +101,7 @@ int run(std::span<char*> args) {
 
   // Log-spaced buckets: 8 per power of two, from 1 us to ~16 s; empty buckets are left out.
   // Part of the JSON rather than a file, so the tool never opens a path it was given.
-  std::cout << ",\"hist\":[";
+  std::cout << R"(,"hist":[)";
   std::size_t idx = 0;
   bool first = true;
   for (int b = 0; b < 8 * 24; ++b) {
