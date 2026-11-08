@@ -88,14 +88,21 @@ jobs:
           pattern: packages-*
           merge-multiple: true
           path: dist
+      # syft runs from its container image (Docker Hub) instead of anchore/sbom-action, which
+      # downloads syft from GitHub Releases on every run: those downloads returned HTTP 504 for
+      # hours and blocked the v1.0.0 release. One retry covers a registry hiccup.
       - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: dist/softswitch-${{ steps.ver.outputs.tag }}.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          SYFT_IMAGE: anchore/syft:v1.42.3
+        run: |
+          for attempt in 1 2; do
+            docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src:ro" -v "$PWD/dist:/out" \
+              "$SYFT_IMAGE" scan dir:/src -q -o "spdx-json=/out/softswitch-$TAG.spdx.json" && break
+            [[ $attempt == 2 ]] && exit 1
+            echo "::warning::syft failed (attempt $attempt); retrying in 30 s"; sleep 30
+          done
+          jq -r '"\(.spdxVersion), \(.packages | length) packages"' "dist/softswitch-$TAG.spdx.json"
       - name: Checksums
         run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
       - name: Release notes from CHANGELOG.md
