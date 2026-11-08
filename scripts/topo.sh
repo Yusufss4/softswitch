@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Creates or removes the 3-switch veth/netns test topology (see scripts/topology.sh).
+# Creates or removes the veth/netns test topology (see scripts/topology.sh; TOPOLOGY=large for 8
+# switches).
 # Usage: scripts/topo.sh up [--loop] | down
-# Without --loop the sw2-sw3 trunk stays down so the topology is loop-free.
+# Without --loop the LOOP_TRUNK link stays down (sw2-sw3, or sw3-sw7 in the large topology).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/topology.sh
