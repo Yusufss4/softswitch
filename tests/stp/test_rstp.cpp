@@ -331,6 +331,59 @@ TEST(Rstp, IgnoresBpdusThatExceededMaxAge) {
   EXPECT_FALSE(rstp.is_root_bridge());
 }
 
+TEST(Rstp, EveryReceivedTopologyChangeFlushes) {
+  // Regression: a received TC used to be ignored if another TC had been handled in the last
+  // 2 x hello, whatever port it arrived on. During a multi-step reconvergence (an 8-switch ring
+  // losing a link) the TC that mattered was dropped, the bridge kept MACs pointing into a
+  // dead end, and traffic was blackholed until the next topology change.
+  BridgeConfig cfg;
+  cfg.mac = MacAddress::from_u64(0x02000000000B);
+  std::vector<PortId> flushed;
+  Rstp::Callbacks cb;
+  cb.flush = [&](PortId except) { flushed.push_back(except); };
+  Rstp rstp(cfg, 2, cb);
+  const Clock::time_point t0{};
+  rstp.set_port_enabled(0, true, t0);
+  rstp.set_port_enabled(1, true, t0);
+
+  // Port 0 hears the root; port 1 hears a downstream bridge with worse information.
+  pkt::Bpdu from_root;
+  from_root.root_id = make_bridge_id(4096, MacAddress::from_u64(0x020000000001));
+  from_root.bridge_id = from_root.root_id;
+  from_root.set_role(pkt::BpduRole::kDesignated);
+  from_root.max_age = 20 * 256;
+  from_root.hello_time = 2 * 256;
+  rstp.receive(0, from_root, t0);
+  ASSERT_EQ(rstp.status(0).role, Role::kRoot);
+  ASSERT_EQ(rstp.status(1).role, Role::kDesignated);
+  pkt::Bpdu from_below = from_root;
+  from_below.root_path_cost = 40000;
+  from_below.bridge_id = make_bridge_id(32768, MacAddress::from_u64(0x02000000000C));
+  from_below.set_role(pkt::BpduRole::kRoot);
+  from_below.flags = static_cast<std::uint8_t>(from_below.flags | pkt::bpdu_flag::kForwarding);
+
+  flushed.clear();
+  pkt::Bpdu tc_from_root = from_root;
+  tc_from_root.flags =
+      static_cast<std::uint8_t>(tc_from_root.flags | pkt::bpdu_flag::kTopologyChange);
+  rstp.receive(0, tc_from_root, t0 + 1s);
+  const auto changes = rstp.topology_changes();
+  pkt::Bpdu tc_from_below = from_below;
+  tc_from_below.flags =
+      static_cast<std::uint8_t>(tc_from_below.flags | pkt::bpdu_flag::kTopologyChange);
+  rstp.receive(1, tc_from_below, t0 + 2s);  // a second, unrelated change, within 2 x hello
+
+  ASSERT_EQ(flushed.size(), 2U) << "the second topology change must flush too";
+  EXPECT_EQ(flushed[0], 0);  // everything except the port the TC came in on
+  EXPECT_EQ(flushed[1], 1);
+
+  // The same TC repeated in the next BPDUs still flushes (as 802.1D-2004 does), but is counted
+  // once per 2 x hello window, so `show spanning-tree` reports changes, not BPDUs.
+  rstp.receive(0, tc_from_root, t0 + 3s);
+  EXPECT_EQ(flushed.size(), 3U);
+  EXPECT_EQ(rstp.topology_changes(), changes);
+}
+
 TEST(Rstp, LoopedBackOwnBpduMakesABackupPort) {
   SimNet net;
   const auto a = net.add_bridge(32768, 0x02000000000A, 2);
