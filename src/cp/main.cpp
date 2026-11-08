@@ -50,6 +50,15 @@ int run(std::span<char*> args) {
       options.http_port = static_cast<std::uint16_t>(std::stoul(value()));
     } else if (arg == "--http-bind") {
       options.http_bind = value();
+    } else if (arg == "--publish-mode") {
+      const auto mode = value();
+      const auto parsed = softswitch::shm::parse_publish_mode(mode);
+      if (!parsed) {
+        throw std::invalid_argument("--publish-mode must be qsbr, mutex or mutex-pi");
+      }
+      options.publish_mode = *parsed;
+    } else if (arg == "--publish-hz") {
+      options.publish_hz = static_cast<std::uint32_t>(std::stoul(value()));
     } else if (arg == "--debug") {
       softswitch::log::set_level(softswitch::log::Level::kDebug);
     } else if (arg == "--version") {

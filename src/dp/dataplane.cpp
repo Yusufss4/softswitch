@@ -219,6 +219,18 @@ void DataPlane::forward_loop() noexcept {
       continue;
     }
 
+    const bool locked = region_->publish_mode != shm::PublishMode::kQsbr;
+    if (locked) {
+      // Demo only: this is the wait the QSBR design exists to avoid.
+      const std::uint64_t asked = sys::monotonic_ns();
+      (void)::pthread_mutex_lock(&region_->table_lock);
+      const std::uint64_t waited = sys::monotonic_ns() - asked;
+      shm::bump(dp.lock_waits);
+      shm::bump(dp.lock_wait_total_ns, waited);
+      if (waited > dp.max_lock_wait_ns.load(std::memory_order_relaxed)) {
+        dp.max_lock_wait_ns.store(waited, std::memory_order_relaxed);
+      }
+    }
     const std::uint64_t batch_start = sys::monotonic_ns();
     const shm::Tables& tables = reader.enter();
     pipeline.set_now(batch_start);
@@ -243,6 +255,9 @@ void DataPlane::forward_loop() noexcept {
       port->tx_flush();
     }
     reader.exit();
+    if (locked) {
+      (void)::pthread_mutex_unlock(&region_->table_lock);
+    }
 
     if (pipeline.take_notify()) {
       (void)sys::eventfd_signal(notify_fd_.get());

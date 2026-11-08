@@ -68,4 +68,29 @@ const char* to_string(StpState state) noexcept {
   return "?";
 }
 
+const char* to_string(PublishMode mode) noexcept {
+  switch (mode) {
+    case PublishMode::kQsbr:
+      return "qsbr";
+    case PublishMode::kMutex:
+      return "mutex";
+    case PublishMode::kMutexPi:
+      return "mutex-pi";
+  }
+  return "?";
+}
+
+std::optional<PublishMode> parse_publish_mode(std::string_view name) noexcept {
+  if (name == "qsbr") {
+    return PublishMode::kQsbr;
+  }
+  if (name == "mutex") {
+    return PublishMode::kMutex;
+  }
+  if (name == "mutex-pi") {
+    return PublishMode::kMutexPi;
+  }
+  return std::nullopt;
+}
+
 }  // namespace softswitch::shm

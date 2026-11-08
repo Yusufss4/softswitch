@@ -6,7 +6,7 @@ namespace softswitch::shm {
 
 bool TablePublisher::grace_period_over() const noexcept {
   const DataPlaneState& dp = region_->dp;
-  return seq_ == 0 || dp.attached.load(std::memory_order_seq_cst) == 0 ||
+  return exclusive_ || seq_ == 0 || dp.attached.load(std::memory_order_seq_cst) == 0 ||
          dp.idle.load(std::memory_order_seq_cst) != 0 ||
          dp.ack_seq.load(std::memory_order_acquire) >= seq_;
 }

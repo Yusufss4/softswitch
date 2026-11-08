@@ -33,6 +33,10 @@ struct ControlPlaneOptions {
   std::string config_file;      ///< Startup config (CLI commands, one per line); optional.
   std::uint16_t http_port = 0;  ///< Read-only web GUI; 0 = off.
   std::string http_bind = "0.0.0.0";
+  /// Table hand-off. Anything but kQsbr exists only for the priority-inversion demo.
+  shm::PublishMode publish_mode = shm::PublishMode::kQsbr;
+  /// Stress knob: republish the tables this many times a second even without changes (0 = off).
+  std::uint32_t publish_hz = 0;
 };
 
 /// Derives a stable, locally administered MAC from the switch name (bridge ID / router MAC).
@@ -93,6 +97,7 @@ class ControlPlane {
   /// Sends an IGMP query in @p vlan (general when @p group is 0.0.0.0).
   void send_igmp_query(VlanId vlan, Ipv4Address group, std::uint8_t max_resp_tenths);
   void publish_now();
+  void publish_tables();
   void build_tables(shm::Tables& tables) const;
   /// Re-applies static MACs from the config and drops dynamic entries the config invalidated.
   void reconcile_fdb();

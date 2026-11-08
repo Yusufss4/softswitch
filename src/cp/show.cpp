@@ -318,7 +318,14 @@ std::string ControlPlane::show_dataplane() const {
       << dp.ack_seq.load() << ")\n"
       << "max grace wait:  "
       << std::chrono::duration_cast<std::chrono::microseconds>(publisher_->max_wait()).count()
-      << " us, timeouts " << publisher_->timeouts() << "\n";
+      << " us, timeouts " << publisher_->timeouts() << "\n"
+      << "publish mode:    " << shm::to_string(region_->publish_mode) << "\n";
+  if (region_->publish_mode != shm::PublishMode::kQsbr) {
+    const std::uint64_t waits = get(dp.lock_waits);
+    out << "table lock:      " << waits << " batches, mean wait "
+        << (waits == 0 ? 0 : get(dp.lock_wait_total_ns) / waits) << " ns, max wait "
+        << get(dp.max_lock_wait_ns) / 1000 << " us\n";
+  }
   TextTable rings({"Ring", "Depth", "Capacity", "Dropped"});
   rings.add_row({"learn (dp->cp)", u64(region_->learn.size()), u64(region_->learn.kCapacity),
                  u64(region_->learn.drops())});
